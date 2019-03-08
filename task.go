@@ -224,22 +224,21 @@ func Do(t *TimeTask) {
 	if t.TaskName != "" {
 		RWFUNC.Lock()
 		if funcx, ok := TaskFuncMap[t.TaskName]; ok {
-			RWFUNC.RUnlock()
+			RWFUNC.Unlock()
 			funcx(t)
 		} else {
-			RWFUNC.RUnlock()
+			RWFUNC.Unlock()
 			runDo(t)
 		}
 	} else if DefaultTaskName != "" {
 		RWFUNC.Lock()
 		if funcx, ok := TaskFuncMap[DefaultTaskName]; ok {
-			RWFUNC.RUnlock()
+			RWFUNC.Unlock()
 			funcx(t)
 		} else {
-			RWFUNC.RUnlock()
+			RWFUNC.Unlock()
 			runDo(t)
 		}
-		RWFUNC.RUnlock()
 	} else {
 		runDo(t)
 	}
@@ -275,18 +274,19 @@ func End(t *TimeTask, stop interface{}) {
 	if t.TaskName != "" {
 		RWFUNCEND.Lock()
 		if funcx, ok := TaskEndFuncMap[t.TaskName]; ok {
-			RWFUNCEND.RUnlock()
+			RWFUNCEND.Unlock()
 			funcx(t, stop)
 		} else {
-			RWFUNCEND.RUnlock()
+			RWFUNCEND.Unlock()
 			endTask(t, stop)
 		}
 	} else if DefaultTaskName != "" {
 		RWFUNCEND.Lock()
 		if funcx, ok := TaskEndFuncMap[DefaultTaskName]; ok {
-			RWFUNCEND.RUnlock()
+			RWFUNCEND.Unlock()
 			funcx(t, stop)
 		} else {
+			RWFUNCEND.Unlock()
 			endTask(t, stop)
 		}
 

@@ -2,7 +2,6 @@ package kernel
 
 import (
 	"encoding/json"
-	"flag"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -30,16 +29,12 @@ func fail(w *http.ResponseWriter) {
 	return
 }
 
-var port = flag.String("port", "0.0.0.0:8001", "port set")
-
-func Server() {
-	flag.Parse()
-
+func Server(port string) {
 	http.HandleFunc("/pushsub", addTc)      // 增加任务
 	http.HandleFunc("/updatesub", updateTc) //更新任务
 	http.HandleFunc("/status", status)      //获取状态
 	http.HandleFunc("/delsub", delTc)       //删除任务
-	err := http.ListenAndServe(*port, nil)
+	err := http.ListenAndServe(port, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

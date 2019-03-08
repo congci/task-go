@@ -30,9 +30,6 @@ const (
 
 //执行榜单定时
 type TimeTask struct {
-	Id       int    `json:"id"`
-	TaskName string `json:"task_name"` //如果不传有默认
-
 	T  *time.Ticker     `json:"-"` //定时器channel
 	TD *time.Timer      `json:"-"` //延时器channel
 	C  chan interface{} `json:"-"` //用于通知任务close
@@ -41,6 +38,8 @@ type TimeTask struct {
 
 //任务通用结构体
 type Task struct {
+	Id         int    `json:"id"`
+	TaskName   string `json:"task_name"`   //如果不传有默认
 	TaskStr    string `json:"taskstr"`     //存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、必须
 	Delay      int    `json:"delay"`       //如果有延时、则代表任务是一次性任务
 	Num        uint   `json:"num"`         //执行次数 用户状态观察

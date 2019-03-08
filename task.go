@@ -181,6 +181,7 @@ func newDelayTak(t *TimeTask) {
 				Do(t)
 			case stop := <-t.C:
 				End(t, stop)
+				return
 			}
 		}
 	}(t)
@@ -210,6 +211,7 @@ func newTask(t *TimeTask) {
 				Do(t)
 			case stop := <-t.C:
 				End(t, stop)
+				return
 			}
 		}
 	}(t)

@@ -117,7 +117,6 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 			delayTc[k] = &task
 		}
 	}
-
 	fail(&w)
 }
 

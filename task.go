@@ -224,6 +224,10 @@ func Do(t *TimeTask) {
 		}
 	}()
 	t.Num++
+	//加个保险
+	if t.StartTaskTime+t.Cycle < time.Now().Unix() {
+		return
+	}
 	if t.Command != "" {
 		cmd := exec.Command(t.Command)
 		if _, err := cmd.Output(); err != nil {

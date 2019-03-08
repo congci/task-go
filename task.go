@@ -186,6 +186,9 @@ func newDelayTak(t *TimeTask) {
 				//任务的task
 				Do(t)
 			case stop := <-t.C:
+				if stop == RENEWTASK {
+					return
+				}
 				End(t, stop)
 				return
 			}
@@ -216,6 +219,9 @@ func newTask(t *TimeTask) {
 				//任务的task
 				Do(t)
 			case stop := <-t.C:
+				if stop == RENEWTASK {
+					return
+				}
 				End(t, stop)
 				return
 			}

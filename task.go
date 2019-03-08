@@ -91,7 +91,7 @@ func GetTasks() []*TimeTask {
 
 //往任务链表里加数据
 func AppendTask(t *TimeTask) {
-	Tc = append(Tc, t)
+	preTasks = append(preTasks, t)
 }
 
 //设置默认task

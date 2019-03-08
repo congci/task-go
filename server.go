@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -51,14 +52,8 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 		fail(&w)
 		return
 	}
-
-	for _, v := range Tc {
-		if v.Id == task.Id {
-			return
-		}
-	}
-
 	task.TaskStr = string(b)
+
 	if task.Create_time != "" {
 		s, _ := time.Parse("2006-01-02 15:04:05", task.Create_time)
 		//任务开始时间和任务周期必须有
@@ -66,11 +61,50 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 	} else {
 		task.StartTaskTime = time.Now().Unix()
 	}
+	AddTc(&task)
+	success(&w)
+}
+
+//外部动态添加任务
+func AddTc(task *TimeTask) error {
+	for _, v := range Tc {
+		if v.Id == task.Id {
+			return nil
+		}
+	}
 	//开始任务、这里忽略线程安全、
 	RW.Lock()
-	newTask(&task)
+	newTask(task)
 	RW.Unlock()
-	success(&w)
+	return nil
+}
+
+//更新任务
+func UpdateTc(task *TimeTask) error {
+	RW.Lock()
+	defer RW.Unlock()
+	for k, v := range Tc {
+		if v.Id == task.Id {
+			// 废弃这个协程任务并且开一个新的定时器
+			v.C <- RENEWTASK
+			if k+1 > len(Tc) {
+				Tc = append(Tc[:k], Tc[k+1:]...)
+			} else {
+				Tc = Tc[:k]
+			}
+			newTask(task)
+			return nil
+		}
+	}
+
+	//如果是中断延时的任务则直接更改
+	for k, v := range delayTc {
+		if v.Id == task.Id {
+			delayTc[k] = task
+			return nil
+		}
+	}
+	return errors.New("fail")
 }
 
 //修改任务
@@ -94,41 +128,15 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 		task.StartTaskTime = time.Now().Unix()
 	}
 
-	RW.Lock()
-	defer RW.Unlock()
-	for k, v := range Tc {
-		if v.Id == task.Id {
-			// 废弃这个协程任务并且开一个新的定时器
-			v.C <- RENEWTASK
-			if k+1 > len(Tc) {
-				Tc = append(Tc[:k], Tc[k+1:]...)
-			} else {
-				Tc = Tc[:k]
-			}
-			newTask(&task)
-			success(&w)
-			return
-		}
+	err = UpdateTc(&task)
+	if err != nil {
+		fail(&w)
 	}
-
-	//如果是中断延时的任务则直接更改
-	for k, v := range delayTc {
-		if v.Id == task.Id {
-			delayTc[k] = &task
-		}
-	}
-	fail(&w)
+	success(&w)
 }
 
 //删除任务
-func delTc(w http.ResponseWriter, req *http.Request) {
-	req.ParseForm()
-	if len(req.Form["id"]) < 0 {
-		var r = Res{Code: 100, Msg: "fail"}
-		res, _ := json.Marshal(&r)
-		w.Write(res)
-	}
-	id, _ := strconv.Atoi(req.Form["id"][0])
+func DelTc(id int) error {
 	RW.Lock()
 	defer RW.Unlock()
 
@@ -141,11 +149,26 @@ func delTc(w http.ResponseWriter, req *http.Request) {
 			} else {
 				Tc = Tc[:k]
 			}
-			success(&w)
-			return
+			return nil
 		}
 	}
-	fail(&w)
+	return errors.New("del task fail")
+}
+
+//删除任务
+func delTc(w http.ResponseWriter, req *http.Request) {
+	req.ParseForm()
+	if len(req.Form["id"]) < 0 {
+		var r = Res{Code: 100, Msg: "fail"}
+		res, _ := json.Marshal(&r)
+		w.Write(res)
+	}
+	id, _ := strconv.Atoi(req.Form["id"][0])
+	err := DelTc(id)
+	if err != nil {
+		fail(&w)
+	}
+	success(&w)
 }
 
 //获取状态

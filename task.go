@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"os/exec"
 	"sync"
 	"time"
 
@@ -23,11 +24,12 @@ var (
 
 //执行榜单定时
 type TimeTask struct {
-	Id       int              `json:"id"`
-	TaskName string           `json:"task_name"` //如果不传有默认
-	T        *time.Ticker     `json:"-"`         //定时器channel
-	TD       *time.Timer      `json:"-"`         //延时器channel
-	C        chan interface{} `json:"-"`         //用于通知任务close
+	Id       int    `json:"id"`
+	TaskName string `json:"task_name"` //如果不传有默认
+
+	T  *time.Ticker     `json:"-"` //定时器channel
+	TD *time.Timer      `json:"-"` //延时器channel
+	C  chan interface{} `json:"-"` //用于通知任务close
 	Task
 }
 
@@ -48,8 +50,9 @@ type Task struct {
 	Create_time string `json:"create_time"` //创建时间、如果没有则为当前时间
 	Update_time string `json:"update_time"` //更新时间
 
-	StartTaskTime int64 `json:"starttasktime"` //任务开始时间
-	Interrupted   int8  `json:"interrupted"`   //第一次导入的时候看是否中断过
+	Command       string `json:"common"`        //如果有common代表是命令模式
+	StartTaskTime int64  `json:"starttasktime"` //任务开始时间
+	Interrupted   int8   `json:"interrupted"`   //第一次导入的时候看是否中断过
 }
 
 var (
@@ -221,6 +224,17 @@ func Do(t *TimeTask) {
 		}
 	}()
 	t.Num++
+	if t.Command != "" {
+		cmd := exec.Command(t.Command)
+		if _, err := cmd.Output(); err != nil {
+			log.Println(err)
+			t.FailNum++
+			queue = append(queue, t)
+		} else {
+			t.SuccessNum++
+		}
+	}
+
 	if t.TaskName != "" {
 		RWFUNC.Lock()
 		if funcx, ok := TaskFuncMap[t.TaskName]; ok {

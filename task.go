@@ -18,7 +18,7 @@ var (
 	//默认执行哪个任务
 	DefaultTaskName string
 	TaskFuncMap     map[string]func(*TimeTask)
-	TaskEndFuncMap  map[string]func(*TimeTask)
+	TaskEndFuncMap  map[string]func(*TimeTask, interface{})
 )
 
 //执行榜单定时
@@ -107,7 +107,7 @@ func SetDefaultTaskFunc(name string, f func(*TimeTask)) {
 }
 
 //设置任务执行函数
-func SetDefaultTaskEndFunc(name string, f func(*TimeTask)) {
+func SetDefaultTaskEndFunc(name string, f func(*TimeTask, interface{})) {
 	RWFUNCEND.Lock()
 	TaskEndFuncMap[name] = f
 	RWFUNCEND.Unlock()
@@ -119,7 +119,7 @@ func SetAllDefaultTaskFunc(fs map[string]func(*TimeTask)) {
 }
 
 //设置任务执行函数
-func SetAllDefaultTaskEndFunc(fs map[string]func(*TimeTask)) {
+func SetAllDefaultTaskEndFunc(fs map[string]func(*TimeTask, interface{})) {
 	TaskEndFuncMap = fs
 }
 
@@ -267,12 +267,12 @@ func End(t *TimeTask, stop interface{}) {
 		RWFUNCEND.Lock()
 		funcx := TaskEndFuncMap[t.TaskName]
 		RWFUNCEND.RUnlock()
-		funcx(t)
+		funcx(t, stop)
 	} else if DefaultTaskName != "" {
 		RWFUNCEND.Lock()
 		funcx := TaskEndFuncMap[DefaultTaskName]
 		RWFUNCEND.RUnlock()
-		funcx(t)
+		funcx(t, stop)
 	} else {
 		endTask(t, stop)
 	}

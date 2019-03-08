@@ -9,13 +9,16 @@ import (
 
 var RW sync.RWMutex
 var RWD sync.RWMutex
+var RWFUNC sync.RWMutex
+var RWFUNCEND sync.RWMutex
 
 var (
 	//默认间隔
 	DefaultDuration int64 = 3600
 	//默认执行哪个任务
 	DefaultTaskName string
-	DefaultTaskMap  map[string]func(*TimeTask)
+	TaskFuncMap     map[string]func(*TimeTask)
+	TaskEndFuncMap  map[string]func(*TimeTask)
 )
 
 //执行榜单定时
@@ -91,6 +94,35 @@ func AppendTask(t *TimeTask) {
 	Tc = append(Tc, t)
 }
 
+//设置默认task
+func SetDefaultTaskName(name string) {
+	DefaultTaskName = name
+}
+
+//设置任务执行函数
+func SetDefaultTaskFunc(name string, f func(*TimeTask)) {
+	RWFUNC.Lock()
+	TaskFuncMap[name] = f
+	RWFUNC.Unlock()
+}
+
+//设置任务执行函数
+func SetDefaultTaskEndFunc(name string, f func(*TimeTask)) {
+	RWFUNCEND.Lock()
+	TaskEndFuncMap[name] = f
+	RWFUNCEND.Unlock()
+}
+
+//设置任务执行函数
+func SetAllDefaultTaskFunc(fs map[string]func(*TimeTask)) {
+	TaskFuncMap = fs
+}
+
+//设置任务执行函数
+func SetAllDefaultTaskEndFunc(fs map[string]func(*TimeTask)) {
+	TaskEndFuncMap = fs
+}
+
 //初始化 任务
 func preloadTask() {
 	//结束时间 - 当前时间 定时器执行、如果到了时间执行对应的操作、然后tick、保证接上以前的任务
@@ -145,7 +177,7 @@ func newDelayTak(t *TimeTask) {
 				//任务的task
 				Do(t)
 			case stop := <-t.C:
-				EndTask(t, stop)
+				End(t, stop)
 			}
 		}
 	}(t)
@@ -174,7 +206,7 @@ func newTask(t *TimeTask) {
 				//任务的task
 				Do(t)
 			case stop := <-t.C:
-				EndTask(t, stop)
+				End(t, stop)
 			}
 		}
 	}(t)
@@ -189,7 +221,19 @@ func Do(t *TimeTask) {
 		}
 	}()
 	t.Num++
-	runDo(t)
+	if t.TaskName != "" {
+		RWFUNC.Lock()
+		funcx := TaskFuncMap[t.TaskName]
+		RWFUNC.RUnlock()
+		funcx(t)
+	} else if DefaultTaskName != "" {
+		RWFUNC.Lock()
+		funcx := TaskFuncMap[DefaultTaskName]
+		defer RWFUNC.RUnlock()
+		funcx(t)
+	} else {
+		runDo(t)
+	}
 }
 
 func runDo(t *TimeTask) {
@@ -213,8 +257,23 @@ func SuccessTask(t *TimeTask) {
 func FailTask(t *TimeTask) {
 	t.FailNum++
 }
+func endTask(t *TimeTask, stop interface{}) {
+	log.Print("end", stop)
+}
 
 //任务完成后操作
-func EndTask(t *TimeTask, stop interface{}) {
-	// ChangeStatus(t, stop)
+func End(t *TimeTask, stop interface{}) {
+	if t.TaskName != "" {
+		RWFUNCEND.Lock()
+		funcx := TaskEndFuncMap[t.TaskName]
+		RWFUNCEND.RUnlock()
+		funcx(t)
+	} else if DefaultTaskName != "" {
+		RWFUNCEND.Lock()
+		funcx := TaskEndFuncMap[DefaultTaskName]
+		RWFUNCEND.RUnlock()
+		funcx(t)
+	} else {
+		endTask(t, stop)
+	}
 }

@@ -13,12 +13,12 @@
 - SetAllDefaultTaskEndFunc 重置全部任务结束函数
 - Server 设置监听、可以接口加/更新/删除/获取状态 
 
-- AddTc 添加任务
+- AddTc 添加任务 可执行过程中加 [注意、执行过程中慎用、会造成循环添加、]
 - UpdateTc 修改任务
 - DelTc 删除任务
 
 > 另外支持 接口 增删改操作
-``` 
+```
     http.HandleFunc("/pushsub", addTc)      //增加任务
 	http.HandleFunc("/updatesub", updateTc) //更新任务
 	http.HandleFunc("/status", status)      //获取状态

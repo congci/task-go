@@ -110,6 +110,14 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+
+	//如果是中断延时的任务则直接更改
+	for k, v := range delayTc {
+		if v.Id == task.Id {
+			delayTc[k] = &task
+		}
+	}
+
 	fail(&w)
 }
 

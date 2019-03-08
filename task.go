@@ -17,8 +17,8 @@ var (
 	DefaultDuration int64 = 3600
 	//默认执行哪个任务
 	DefaultTaskName string
-	TaskFuncMap     map[string]func(*TimeTask)
-	TaskEndFuncMap  map[string]func(*TimeTask, interface{})
+	TaskFuncMap     = make(map[string]func(*TimeTask))
+	TaskEndFuncMap  = make(map[string]func(*TimeTask, interface{}))
 )
 
 //执行榜单定时
@@ -223,14 +223,23 @@ func Do(t *TimeTask) {
 	t.Num++
 	if t.TaskName != "" {
 		RWFUNC.Lock()
-		funcx := TaskFuncMap[t.TaskName]
-		RWFUNC.RUnlock()
-		funcx(t)
+		if funcx, ok := TaskFuncMap[t.TaskName]; ok {
+			RWFUNC.RUnlock()
+			funcx(t)
+		} else {
+			RWFUNC.RUnlock()
+			runDo(t)
+		}
 	} else if DefaultTaskName != "" {
 		RWFUNC.Lock()
-		funcx := TaskFuncMap[DefaultTaskName]
-		defer RWFUNC.RUnlock()
-		funcx(t)
+		if funcx, ok := TaskFuncMap[DefaultTaskName]; ok {
+			RWFUNC.RUnlock()
+			funcx(t)
+		} else {
+			RWFUNC.RUnlock()
+			runDo(t)
+		}
+		RWFUNC.RUnlock()
 	} else {
 		runDo(t)
 	}
@@ -265,14 +274,22 @@ func endTask(t *TimeTask, stop interface{}) {
 func End(t *TimeTask, stop interface{}) {
 	if t.TaskName != "" {
 		RWFUNCEND.Lock()
-		funcx := TaskEndFuncMap[t.TaskName]
-		RWFUNCEND.RUnlock()
-		funcx(t, stop)
+		if funcx, ok := TaskEndFuncMap[t.TaskName]; ok {
+			RWFUNCEND.RUnlock()
+			funcx(t, stop)
+		} else {
+			RWFUNCEND.RUnlock()
+			endTask(t, stop)
+		}
 	} else if DefaultTaskName != "" {
 		RWFUNCEND.Lock()
-		funcx := TaskEndFuncMap[DefaultTaskName]
-		RWFUNCEND.RUnlock()
-		funcx(t, stop)
+		if funcx, ok := TaskEndFuncMap[DefaultTaskName]; ok {
+			RWFUNCEND.RUnlock()
+			funcx(t, stop)
+		} else {
+			endTask(t, stop)
+		}
+
 	} else {
 		endTask(t, stop)
 	}

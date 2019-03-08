@@ -99,7 +99,7 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 	for k, v := range Tc {
 		if v.Id == task.Id {
 			// 废弃这个协程任务并且开一个新的定时器
-			v.C <- 2
+			v.C <- RENEWTASK
 			if k+1 > len(Tc) {
 				Tc = append(Tc[:k], Tc[k+1:]...)
 			} else {
@@ -136,7 +136,7 @@ func delTc(w http.ResponseWriter, req *http.Request) {
 	for k, v := range Tc {
 		if v.Id == id {
 			// 废弃这个协程任务
-			v.C <- 9
+			v.C <- DELTASK
 			if k+1 > len(Tc) {
 				Tc = append(Tc[:k], Tc[k+1:]...)
 			} else {

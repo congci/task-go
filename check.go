@@ -15,7 +15,7 @@ func check() {
 			//(Tc[i].Duration < 100 && Tc[i].Num > 3) 为特殊设定、测试用的、可以求掉
 			if (Tc[i].Cycle != -1 && Tc[i].StartTaskTime+Tc[i].Cycle < now) || (Tc[i].LimitNum != 0 && Tc[i].Num > Tc[i].LimitNum) || (Tc[i].Duration < 100 && Tc[i].Num > 3) {
 				log.Print("close Tc" + Tc[i].TaskStr)
-				Tc[i].C <- 2
+				Tc[i].C <- TIMEOUTASK
 				if i+1 > len(Tc) {
 					Tc = Tc[:i]
 				} else {

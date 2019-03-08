@@ -22,6 +22,12 @@ var (
 	TaskEndFuncMap  = make(map[string]func(*TimeTask, interface{}))
 )
 
+const (
+	TIMEOUTASK = 2 //自然过期
+	RENEWTASK  = 3 //代表新开一个
+	DELTASK    = 9 //删除
+)
+
 //执行榜单定时
 type TimeTask struct {
 	Id       int    `json:"id"`

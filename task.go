@@ -1,4 +1,4 @@
-package kernel
+package task
 
 import (
 	"os/exec"
@@ -30,9 +30,10 @@ const (
 
 //执行榜单定时
 type TimeTask struct {
-	T  *time.Ticker     `json:"-"` //定时器channel
-	TD *time.Timer      `json:"-"` //延时器channel
-	C  chan interface{} `json:"-"` //用于通知任务close
+	T         *time.Ticker     `json:"-"` //定时器channel
+	TD        *time.Timer      `json:"-"` //延时器channel
+	C         chan interface{} `json:"-"` //用于通知任务close
+	Cycle_Num int64            `json:"cycle_num"`
 	Task
 }
 
@@ -142,6 +143,11 @@ func preloadTask() {
 		//如果任务已经结束、则忽略
 		if v.Cycle != -1 && v.StartTaskTime+v.Cycle < now {
 			continue
+		}
+		//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
+		if (v.EndTime != 0 && v.EndTime < now) || (v.StartTime != 0 && v.StartTime < now-v.Duration) {
+			v.StartTime = now
+			v.EndTime = now + v.Duration
 		}
 		//任务中断过
 		if (v.EndTime != 0 || v.Interrupted == 1) && (now > v.StartTime && v.EndTime > now && v.EndTime-now > 0 && v.EndTime-now < v.Duration) {

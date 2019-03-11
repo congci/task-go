@@ -179,6 +179,7 @@ func delTc(w http.ResponseWriter, req *http.Request) {
 
 //获取状态
 func status(w http.ResponseWriter, req *http.Request) {
-	b, _ := json.Marshal(Tc)
+	t := append(Tc, delayTc...)
+	b, _ := json.Marshal(t)
 	w.Write(b)
 }

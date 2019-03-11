@@ -146,6 +146,7 @@ func preloadTask() {
 		//任务中断过
 		if (v.EndTime != 0 || v.Interrupted == 1) && (now > v.StartTime && v.EndTime > now && v.EndTime-now > 0 && v.EndTime-now < v.Duration) {
 			log.Print("delay Tc" + v.TaskStr)
+			v.Interrupted = 1
 			delayTc = append(delayTc, v)
 		} else {
 			newTask(v)
@@ -208,6 +209,8 @@ func newTask(t *TimeTask) {
 		newDelayTak(t)
 		return
 	}
+
+	t.Interrupted = 0
 	ticker := time.NewTicker(time.Duration(t.Duration) * time.Second)
 	c := make(chan interface{}, 1)
 	t.T = ticker

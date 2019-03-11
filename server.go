@@ -119,6 +119,11 @@ func formatTask(task *TimeTask) {
 	if task.EndTime == 0 {
 		task.EndTime = now + task.Duration
 	}
+	//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
+	if (task.EndTime != 0 && task.EndTime < now) || (task.StartTime != 0 && task.StartTime < now-task.Duration) {
+		task.StartTime = now
+		task.EndTime = now + task.Duration
+	}
 }
 
 //修改任务

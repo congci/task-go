@@ -53,14 +53,9 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	task.TaskStr = string(b)
+	//初始化task
+	formatTask(&task)
 
-	if task.Create_time != "" {
-		s, _ := time.Parse("2006-01-02 15:04:05", task.Create_time)
-		//任务开始时间和任务周期必须有
-		task.StartTaskTime = s.Unix()
-	} else {
-		task.StartTaskTime = time.Now().Unix()
-	}
 	AddTc(&task)
 	success(&w)
 }
@@ -107,6 +102,25 @@ func UpdateTc(task *TimeTask) error {
 	return errors.New("fail")
 }
 
+func formatTask(task *TimeTask) {
+	now := time.Now().Unix()
+
+	if task.Create_time != "" {
+		s, _ := time.Parse("2006-01-02 15:04:05", task.Create_time)
+		//任务开始时间和任务周期必须有
+		task.StartTaskTime = s.Unix()
+	} else {
+		task.StartTaskTime = now
+	}
+
+	if task.StartTime == 0 {
+		task.StartTime = now
+	}
+	if task.EndTime == 0 {
+		task.EndTime = now + task.Duration
+	}
+}
+
 //修改任务
 func updateTc(w http.ResponseWriter, req *http.Request) {
 	b, _ := ioutil.ReadAll(req.Body)
@@ -120,13 +134,7 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 	}
 
 	task.TaskStr = string(b)
-	if task.Create_time != "" {
-		s, _ := time.Parse("2006-01-02 15:04:05", task.Create_time)
-		//任务开始时间和任务周期必须有
-		task.StartTaskTime = s.Unix()
-	} else {
-		task.StartTaskTime = time.Now().Unix()
-	}
+	formatTask(&task)
 
 	err = UpdateTc(&task)
 	if err != nil {
@@ -159,9 +167,7 @@ func DelTc(id int) error {
 func delTc(w http.ResponseWriter, req *http.Request) {
 	req.ParseForm()
 	if len(req.Form["id"]) < 0 {
-		var r = Res{Code: 100, Msg: "fail"}
-		res, _ := json.Marshal(&r)
-		w.Write(res)
+		fail(&w)
 	}
 	id, _ := strconv.Atoi(req.Form["id"][0])
 	err := DelTc(id)

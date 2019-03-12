@@ -64,23 +64,11 @@ type Task struct {
 	Interrupted   int8   `json:"interrupted"`   //第一次导入的时候看是否中断过
 }
 
-var (
-	//当前任务链
-	Tc []*TimeTask
-
-	//初始任务
-	preTasks []*TimeTask
-
-	//用于初始化的时候保存曾经中断的任务
-	delayTc []*TimeTask
-
-	//保存队列
-	queue []*TimeTask
-)
+var tc = NewQueue()
+var queue = NewQueue()
 
 func Start() {
-	//加载初始任务
-	preloadTask()
+	GO()
 	//异常 重试 //从队列中获取直接执行超过三次则失败
 	go exception()
 	//检测监控
@@ -89,21 +77,17 @@ func Start() {
 
 //获取全部task、包括开始中断中的
 func GetAllTasks() []*TimeTask {
-	RW.RLock()
-	defer RW.RUnlock()
-	return append(Tc, delayTc...)
-}
-
-//获取现有的task
-func GetTasks() []*TimeTask {
-	RW.RLock()
-	defer RW.RUnlock()
-	return Tc
+	var ts []*TimeTask
+	for iter := tc.data.Back(); iter != nil; iter = iter.Prev() {
+		v := iter.Value.(*TimeTask)
+		ts = append(ts, v)
+	}
+	return ts
 }
 
 //往任务链表里加数据
 func AppendTask(t *TimeTask) {
-	preTasks = append(preTasks, t)
+	tc.Push(t)
 }
 
 //设置默认task
@@ -136,10 +120,11 @@ func SetAllDefaultTaskEndFunc(fs map[string]func(*TimeTask, interface{})) {
 }
 
 //初始化 任务
-func preloadTask() {
+func GO() {
 	//结束时间 - 当前时间 定时器执行、如果到了时间执行对应的操作、然后tick、保证接上以前的任务
 	now := time.Now().Unix()
-	for _, v := range preTasks {
+	for e := tc.data.Front(); e != nil; e = e.Next() {
+		v := e.Value.(*TimeTask)
 		//如果任务已经结束、则忽略
 		if v.Cycle != -1 && v.StartTaskTime+v.Cycle < now {
 			continue
@@ -153,30 +138,20 @@ func preloadTask() {
 		if (v.EndTime != 0 || v.Interrupted == 1) && (now > v.StartTime && v.EndTime > now && v.EndTime-now > 0 && v.EndTime-now < v.Duration) {
 			log.Print("delay Tc" + v.TaskStr)
 			v.Interrupted = 1
-			delayTc = append(delayTc, v)
-		} else {
-			newTask(v)
 		}
 	}
-	for _, v := range delayTc {
-		func(v *TimeTask) {
+
+	for e := tc.data.Front(); e != nil; e = e.Next() {
+		v := e.Value.(*TimeTask)
+		if v.Interrupted == 1 {
 			time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
-				RW.Lock()
-				for k, value := range delayTc {
-					if value.Id == v.Id {
-						if k+1 > len(delayTc) {
-							delayTc = append(delayTc[:k], delayTc[k+1:]...)
-						} else {
-							delayTc = delayTc[:k]
-						}
-					}
-				}
 				newTask(v)
-				RW.Unlock()
 				//到点了执行一次
 				Do(v)
 			})
-		}(v)
+		} else {
+			newTask(v)
+		}
 	}
 }
 
@@ -186,7 +161,6 @@ func newDelayTak(t *TimeTask) {
 	c := make(chan interface{}, 1)
 	t.TD = ticker
 	t.C = c
-	Tc = append(Tc, t)
 	go func(t *TimeTask) {
 		defer t.TD.Stop()
 		for {
@@ -221,7 +195,6 @@ func newTask(t *TimeTask) {
 	c := make(chan interface{}, 1)
 	t.T = ticker
 	t.C = c
-	Tc = append(Tc, t)
 	go func(t *TimeTask) {
 		defer t.T.Stop()
 		for {
@@ -258,7 +231,7 @@ func Do(t *TimeTask) {
 		if _, err := cmd.Output(); err != nil {
 			log.Println(err)
 			t.FailNum++
-			queue = append(queue, t)
+
 		} else {
 			t.SuccessNum++
 		}

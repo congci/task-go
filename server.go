@@ -55,50 +55,29 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 	task.TaskStr = string(b)
 	//初始化task
 	formatTask(&task)
-
 	AddTc(&task)
 	success(&w)
 }
 
 //外部动态添加任务
 func AddTc(task *TimeTask) error {
-	for _, v := range Tc {
-		if v.Id == task.Id {
-			return nil
-		}
-	}
-	//开始任务、这里忽略线程安全、
-	RW.Lock()
+	tc.Push(task)
 	newTask(task)
-	RW.Unlock()
 	return nil
 }
 
 //更新任务
 func UpdateTc(task *TimeTask) error {
-	RW.Lock()
-	defer RW.Unlock()
-	for k, v := range Tc {
+	for e := tc.data.Front(); e != nil; {
+		v := e.Value.(*TimeTask)
 		if v.Id == task.Id {
-			// 废弃这个协程任务并且开一个新的定时器
-			v.C <- RENEWTASK
-			if k+1 > len(Tc) {
-				Tc = append(Tc[:k], Tc[k+1:]...)
-			} else {
-				Tc = Tc[:k]
-			}
-			newTask(task)
+			tc.data.Remove(e)
+			AddTc(task)
 			return nil
 		}
+		e = e.Next()
 	}
-
-	//如果是中断延时的任务则直接更改
-	for k, v := range delayTc {
-		if v.Id == task.Id {
-			delayTc[k] = task
-			return nil
-		}
-	}
+	//重开新的定时器
 	return errors.New("fail")
 }
 
@@ -152,18 +131,13 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 func DelTc(id int) error {
 	RW.Lock()
 	defer RW.Unlock()
-
-	for k, v := range Tc {
+	for e := tc.data.Front(); e != nil; {
+		v := e.Value.(*TimeTask)
 		if v.Id == id {
-			// 废弃这个协程任务
-			v.C <- DELTASK
-			if k+1 > len(Tc) {
-				Tc = append(Tc[:k], Tc[k+1:]...)
-			} else {
-				Tc = Tc[:k]
-			}
+			tc.data.Remove(e)
 			return nil
 		}
+		e = e.Next()
 	}
 	return errors.New("del task fail")
 }
@@ -184,7 +158,7 @@ func delTc(w http.ResponseWriter, req *http.Request) {
 
 //获取状态
 func status(w http.ResponseWriter, req *http.Request) {
-	t := append(Tc, delayTc...)
-	b, _ := json.Marshal(t)
+	var ts = GetAllTasks()
+	b, _ := json.Marshal(ts)
 	w.Write(b)
 }

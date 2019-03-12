@@ -13,39 +13,23 @@ var ExceptionData interface {
 
 type Access struct{}
 
-func (m Access) Pop() *TimeTask {
-	l := len(queue)
-	if l == 0 {
-		return nil
-	}
-	task := queue[l]
-	queue = queue[0:(l - 1)]
-	return task
-}
-
-func (m Access) Push(v interface{}) error {
-	task := v.(*TimeTask)
-	queue = append(queue, task)
-	return nil
-}
-
 // -- 异常处理
 //func 重试 //队列获取然后执行
 func exception() {
-	var m Access
 	for {
-		v := m.Pop()
+		v := queue.Pop()
 		if v == nil {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		t := v.(*TimeTask)
 		//数据
-		if v.RetryNum == 3 {
+		if t.RetryNum == 3 {
 			log.Print("retry num 3 ", v)
 			continue
 		}
-		v.RetryNum++
-		Do(v)
+		t.RetryNum++
+		Do(t)
 	}
 
 }

@@ -18,25 +18,22 @@ func NewQueue() *Queue {
 	return q
 }
 
-func (q *Queue) Push(v interface{}) {
+func (q *Queue) push(v interface{}) {
 	defer lock.Unlock()
 	lock.Lock()
 	q.data.PushFront(v)
 }
 
-func (q *Queue) Pop() interface{} {
+func (q *Queue) pop() interface{} {
 	defer lock.Unlock()
 	lock.Lock()
 	iter := q.data.Back()
-	if iter == nil {
-		return nil
-	}
 	v := iter.Value
 	q.data.Remove(iter)
 	return v
 }
 
-func (q *Queue) Dump() {
+func (q *Queue) dump() {
 	for iter := q.data.Back(); iter != nil; iter = iter.Prev() {
 		fmt.Println("item:", iter.Value)
 	}

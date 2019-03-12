@@ -5,19 +5,13 @@ import (
 	"time"
 )
 
-//异常数据获取 接口、可以自己实现\默认从内存中取
-var ExceptionData interface {
-	Pop() *TimeTask
-	Push(v interface{}) error
-}
-
-type Access struct{}
+var retrytt = NewQueue()
 
 // -- 异常处理
 //func 重试 //队列获取然后执行
 func exception() {
 	for {
-		v := queue.Pop()
+		v := retrytt.pop()
 		if v == nil {
 			time.Sleep(1 * time.Second)
 			continue
@@ -29,7 +23,6 @@ func exception() {
 			continue
 		}
 		t.RetryNum++
-		Do(t)
 	}
 
 }

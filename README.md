@@ -1,21 +1,23 @@
 # task_go
->version 1.0.0
+>version 2.0.0
+> 时间轮 + 默认定时器、如果为默认的、也就是一个任务一个定时器、其实golang底层是最小堆 + channel实现的
+> 选择方式 task.NewTask()
 
 **methods*
 
-- GetAllTasks 获取全部任务
-- GetTasks 获取现有任务 不包括开始延后任务(非延时)
-- AppendTask 加任务（这个是各个任务开始加载初始任务的时候调用、在执行过程中不能调用、）
+
+> 加的函数
+- AddOnlyTask 加任务（这个是各个任务开始加载初始任务的时候调用、在执行过程中不能调用、）
 - SetDefaultTaskName 设置默认任务名称
 - SetDefaultTaskFunc 设置单个任务执行函数
 - SetDefaultTaskEndFunc 设置单个任务结束函数
 - SetAllDefaultTaskFunc 重置全部任务执行函数
 - SetAllDefaultTaskEndFunc 重置全部任务结束函数
 - Server 设置监听、可以接口加/更新/删除/获取状态 
-
 - AddTc 添加任务 可执行过程中加 [注意、执行过程中慎用、会造成循环添加、]
 - UpdateTc 修改任务
 - DelTc 删除任务
+- GetAllTasks 获取全部任务
 
 > 另外支持 接口 增删改操作
 ```
@@ -34,6 +36,15 @@
 
 **eg**
 ```
+//任务名称
+const (
+	TIMECHANNEL = iota  //默认的
+	TIMEWHEEL //时间轮
+)
+
+```
+
+```
 package main
 
 import (
@@ -48,18 +59,21 @@ var port = flag.String("port", "0.0.0.0:8001", "port set")
 func main() {
 	flag.Parse()
 
-	//设置初始任务 -- 里面可以调用AppendTask加载初始任务
-	topic.Preload()
+	task := taskx.NewTask(taskx.TIMECHANNEL)
+	//设置初始任务 加载初始任务
+	task.LoadTasks()
 	//设置topic任务的函数
-	taskx.SetDefaultTaskName("topic")
-	taskx.SetDefaultTaskFunc("topic", topic.RunDo)
-	taskx.SetDefaultTaskEndFunc("topic", topic.ChangeStatus)
-	
-	taskx.Start()
-
-	taskx.Server(*port)
+	task.SetDefaultTaskName("topic")
+	task.SetDefaultTaskFunc("topic", topic.RunDo)
+	task.SetDefaultTaskEndFunc("topic", topic.ChangeStatus)
+	task.Start()
+	task.Server(*port)
 }
 ```
+
+
+
+
 
 
 **建议目录结构**
@@ -93,3 +107,5 @@ type Topic struct{
 	MustNotCon string `json:"must_not_con"`
 }
 ```
+
+//增加删除都是在 主线程

@@ -54,13 +54,16 @@ func (tw *Timewheel) prestart() {
 	for e := tw.tt.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*Task)
 		if v.Interrupted == 1 {
-			time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
-				var tmp TimeTask
-				tmp.Task = v
-				do(&tmp)
-				//加入队伍
-				tw.addTc(v)
-			})
+			func(*Task) {
+				time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
+					var tmp TimeTask
+					tmp.Task = v
+					do(&tmp)
+					//加入队伍
+					tw.addTc(v)
+				})
+			}(v)
+
 		} else {
 			tw.addTc(v)
 		}

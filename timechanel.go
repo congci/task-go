@@ -61,11 +61,13 @@ func (tc *Timechannel) prestart() {
 	for e := tc.tt.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*TimeTask)
 		if v.Interrupted == 1 {
-			time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
-				tc.newTask(v)
-				//到点了执行一次
-				do(v)
-			})
+			func(*TimeTask) {
+				time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
+					tc.newTask(v)
+					//到点了执行一次
+					do(v)
+				})
+			}(v)
 		} else {
 			tc.newTask(v)
 		}

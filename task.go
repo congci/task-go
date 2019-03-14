@@ -37,8 +37,8 @@ type Task struct {
 
 	Command string `json:"common"` //如果有common代表是命令模式
 
-	Func    func(*Task) //执行函数
-	EndFunc func(Chanl) //结束函数
+	Func    func(*Task)        //执行函数
+	EndFunc func(*Task, Chanl) //结束函数
 
 	StartTaskTime int64 `json:"starttasktime"` //任务开始时间
 
@@ -144,7 +144,7 @@ func do(t *TimeTask) {
 //任务完成后操作
 func end(t *Task, stop Chanl) {
 	if t.EndFunc != nil {
-		t.EndFunc(stop)
+		t.EndFunc(t, stop)
 		return
 	}
 	endDo(t, stop)

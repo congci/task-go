@@ -229,9 +229,9 @@ func (tw *Timewheel) updateTc(task *Task) error {
 }
 
 //获取全部task、包括开始中断中的
-func (tc *Timewheel) GetAllTasks() []*Task {
+func (tw *Timewheel) GetAllTasks() []*Task {
 	var tmp []*Task
-	for _, v := range tc.solts {
+	for _, v := range tw.solts {
 		for e := v.Front(); e != nil; e = e.Next() {
 			val := e.Value.(*TimeTask)
 			tmp = append(tmp, val.Task)

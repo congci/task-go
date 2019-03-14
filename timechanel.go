@@ -4,8 +4,6 @@ import (
 	"container/list"
 	"errors"
 	"log"
-	"os/exec"
-	"sync"
 	"time"
 	"unsafe"
 )
@@ -15,26 +13,12 @@ var (
 	DefaultDuration int64 = 3600
 )
 
-//执行榜单定时
-type TimeTask struct {
-	T     *time.Ticker `json:"-"` //定时器channel
-	TD    *time.Timer  `json:"-"` //延时器channel
-	C     chan chanl   `json:"-"` //用于通知任务close
-	*Task              //存储的task
-}
-
 //time + channel - 底层是最小堆
 type Timechannel struct {
 	T        *time.Ticker
 	Intervel time.Duration
 	tt       *list.List
-	C        chan chanl //主线程通知信号
-	//默认执行哪个任务
-	defaulttaskname string
-	taskfuncmap     map[string]func(*Task)
-	taskendfuncmap  map[string]func(*Task, interface{})
-	rwf             sync.RWMutex
-	rwfend          sync.RWMutex
+	C        chan Chanl //主线程通知信号
 }
 
 func newTimeChannel() *Timechannel {
@@ -47,13 +31,10 @@ func (tc *Timechannel) initT() {
 	tc.tt = list.New()
 	tc.Intervel = 5                                  //暂时限定5
 	tc.T = time.NewTicker(tc.Intervel * time.Second) //每几秒执行一次
-	tc.taskfuncmap = make(map[string]func(*Task))
-	tc.taskendfuncmap = make(map[string]func(*Task, interface{}))
-
 }
 
-//开始的时候加入
-func (tc *Timechannel) LoadTasks() {
+//如果有有开始任务、那么执行
+func (tc *Timechannel) prestart() {
 	if tc.tt.Len() == 0 {
 		return
 	}
@@ -71,7 +52,7 @@ func (tc *Timechannel) LoadTasks() {
 			v.EndTime = now + v.Duration
 		}
 		//任务中断过
-		if v.EndTime != 0 && (now > v.StartTime && v.EndTime > now && v.EndTime-now > 0 && v.EndTime-now < v.Duration) {
+		if v.EndTime != 0 && (now > v.StartTime && v.EndTime > now && v.EndTime-now < v.Duration) {
 			log.Print("delay Tc" + v.TaskStr)
 			v.Interrupted = 1
 		}
@@ -83,7 +64,7 @@ func (tc *Timechannel) LoadTasks() {
 			time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
 				tc.newTask(v)
 				//到点了执行一次
-				tc.do(v.Task)
+				do(v)
 			})
 		} else {
 			tc.newTask(v)
@@ -93,11 +74,12 @@ func (tc *Timechannel) LoadTasks() {
 
 //开始 任务
 func (tc *Timechannel) Start() {
+	tc.prestart()
 	//默认死循环
 	for {
 		select {
 		case <-tc.T.C:
-			tc.check()
+			// tc.check() 数量小还可以、数量很大的话主协程不能这么做、只能在时间到了加
 		case d := <-tc.C:
 			//增加
 			if d.signal == ADDTASK {
@@ -119,7 +101,7 @@ func (tc *Timechannel) Start() {
 //延时任务
 func (tc *Timechannel) newDelayTak(t *TimeTask) {
 	ticker := time.NewTimer(time.Duration(t.Duration) * time.Second)
-	c := make(chan chanl, 1)
+	c := make(chan Chanl, 1)
 	t.TD = ticker
 	t.C = c
 	go func(t *TimeTask) {
@@ -128,12 +110,13 @@ func (tc *Timechannel) newDelayTak(t *TimeTask) {
 			select {
 			case <-t.TD.C:
 				//任务的task
-				tc.do(t.Task)
+				do(t)
 			case stop := <-t.C:
 				if DELTASK == stop.signal {
 					return
 				}
-				tc.end(t.Task, stop)
+				//删除操作
+				end(t.Task, stop)
 				return
 			}
 		}
@@ -142,7 +125,7 @@ func (tc *Timechannel) newDelayTak(t *TimeTask) {
 
 //定时任务
 func (tc *Timechannel) newTask(t *TimeTask) {
-	log.Println(t)
+	log.Println("task info:", t)
 	if t.Duration == 0 {
 		t.Duration = DefaultDuration
 	}
@@ -151,9 +134,10 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 		return
 	}
 
+	//然后将中断恢复
 	t.Interrupted = 0
 	ticker := time.NewTicker(time.Duration(t.Duration) * time.Second)
-	c := make(chan chanl, 1)
+	c := make(chan Chanl, 1)
 	t.T = ticker
 	t.C = c
 	go func(t *TimeTask) {
@@ -162,115 +146,23 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 			select {
 			case <-t.T.C:
 				//任务的task
-				tc.do(t.Task)
+				do(t)
 			case stop := <-t.C:
 				if stop.signal == UPDATETASK {
 					return
 				}
-				tc.end(t.Task, stop)
+				for e := tc.tt.Front(); e != nil; {
+					v := e.Value.(*TimeTask)
+					if v.Id == t.Id {
+						tc.tt.Remove(e)
+					}
+					e = e.Next()
+				}
+				end(t.Task, stop)
 				return
 			}
 		}
 	}(t)
-}
-
-//执行任务
-func (tc *Timechannel) do(t *Task) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Print(err)
-			return
-		}
-	}()
-	t.Num++
-	//加个保险
-	if t.StartTaskTime+t.Cycle < time.Now().Unix() {
-		tc.end(t, TIMEOUTASK) //过期
-		return
-	}
-	if t.Command != "" {
-		cmd := exec.Command(t.Command)
-		if _, err := cmd.Output(); err != nil {
-			log.Println(err)
-			t.FailNum++
-
-		} else {
-			t.SuccessNum++
-		}
-	}
-
-	if t.TaskName != "" {
-		tc.rwf.Lock()
-		if funcx, ok := tc.taskfuncmap[t.TaskName]; ok {
-			tc.rwf.Unlock()
-			funcx(t)
-		} else {
-			tc.rwf.Unlock()
-			runDo(t)
-		}
-	} else if tc.defaulttaskname != "" {
-		tc.rwf.Lock()
-		if funcx, ok := tc.taskfuncmap[tc.defaulttaskname]; ok {
-			tc.rwf.Unlock()
-			funcx(t)
-		} else {
-			tc.rwf.Unlock()
-			runDo(t)
-		}
-	} else {
-		runDo(t)
-	}
-}
-
-func runDo(t *Task) {
-	log.Print("hello world")
-}
-
-//更新每次开始结束事件、时钟操作
-func (t *TimeTask) UpdateTimeClock() {
-	sn := time.Now().Unix()
-	enn := sn + t.Duration
-	t.StartTime = sn
-	t.EndTime = enn
-}
-
-//任务成功
-func (t *TimeTask) SuccessTask() {
-	t.SuccessNum++
-}
-
-//任务失败
-func (t *TimeTask) FailTask() {
-	t.FailNum++
-}
-func endTask(t *Task, stop interface{}) {
-	log.Print("end", stop)
-}
-
-//任务完成后操作
-func (tc *Timechannel) end(t *Task, stop interface{}) {
-	if t.TaskName != "" {
-		tc.rwfend.Lock()
-		if funcx, ok := tc.taskendfuncmap[t.TaskName]; ok {
-			tc.rwfend.Unlock()
-			funcx(t, stop)
-		} else {
-			tc.rwfend.Unlock()
-			endTask(t, stop)
-		}
-	} else if tc.defaulttaskname != "" {
-		tc.rwfend.Lock()
-		if funcx, ok := tc.taskendfuncmap[tc.defaulttaskname]; ok {
-			tc.rwfend.Unlock()
-			funcx(t, stop)
-		} else {
-			tc.rwfend.Unlock()
-			endTask(t, stop)
-		}
-
-	} else {
-		endTask(t, stop)
-	}
 }
 
 //每秒扫描一次、检查数据是否过期
@@ -279,60 +171,40 @@ func (tc *Timechannel) check() {
 	for e := tc.tt.Front(); e != nil; {
 		t := e.Value.(*TimeTask)
 		if (t.Cycle != -1 && t.StartTaskTime+t.Cycle < now) || (t.LimitNum != 0 && t.Num > t.LimitNum) {
-			t.C <- chanl{signal: TIMEOUTASK}
+			//发送数据
+			t.C <- Chanl{signal: TIMEOUTASK}
 			tc.tt.Remove(e)
 		}
 		e = e.Next()
 	}
 }
 
-//=== 外部调用
+//实现接口
 
 //只在加载前操作、因此没有冲突
 func (tc *Timechannel) AddOnlyTask(t *Task) {
 	var tmp TimeTask
+	formatTask(t)
+
 	tmp.Task = t
 	tc.tt.PushBack(&tmp)
 }
 
-//设置默认task
-func (tc *Timechannel) SetDefaultTaskName(name string) {
-	tc.defaulttaskname = name
-}
-
-//设置任务执行函数
-func (tc *Timechannel) SetDefaultTaskFunc(name string, f func(*Task)) {
-	tc.taskfuncmap[name] = f
-}
-
-//设置任务执行函数\不需要、必须在任务开始前设置
-func (tc *Timechannel) SetDefaultTaskEndFunc(name string, f func(*Task, interface{})) {
-	tc.taskendfuncmap[name] = f
-}
-
-//设置任务执行函数
-func (tc *Timechannel) SetAllDefaultTaskFunc(fs map[string]func(*Task)) {
-	tc.taskfuncmap = fs
-}
-
-//设置任务执行函数
-func (tc *Timechannel) SetAllDefaultTaskEndFunc(fs map[string]func(*Task, interface{})) {
-	tc.taskendfuncmap = fs
-}
-
 //更新
 func (tc *Timechannel) UpdateTc(task *Task) error {
-	tc.C <- chanl{signal: DELTASK, data: unsafe.Pointer(task)}
+	tc.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(task)}
 	return nil
 }
 
 //更新任务
 func (tc *Timechannel) updateTc(task *Task) error {
+	formatTask(task)
+
 	for e := tc.tt.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
 		if v.Id == task.Id {
 			tc.tt.Remove(e)
-			v.C <- chanl{signal: TIMEOUTASK}
+			v.C <- Chanl{signal: TIMEOUTASK}
 			tc.addTc(task)
 			return nil
 		}
@@ -344,13 +216,14 @@ func (tc *Timechannel) updateTc(task *Task) error {
 
 //添加
 func (tc *Timechannel) AddTc(task *Task) error {
-	tc.C <- chanl{signal: ADDTASK, data: unsafe.Pointer(task)}
+	tc.C <- Chanl{signal: ADDTASK, data: unsafe.Pointer(task)}
 	return nil
 }
 
 //往任务链表里加数据
 func (tc *Timechannel) addTc(t *Task) error {
 	var tmp TimeTask
+	formatTask(t)
 	tmp.Task = t
 	tc.tt.PushBack(&tmp)
 	tc.newTask(&tmp)
@@ -359,7 +232,7 @@ func (tc *Timechannel) addTc(t *Task) error {
 
 //删除任务
 func (tc *Timechannel) DelTc(id int) error {
-	tc.C <- chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
+	tc.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
 	return nil
 }
 
@@ -370,7 +243,7 @@ func (tc *Timechannel) delTc(id int) error {
 		v := e.Value.(*TimeTask)
 		if v.Id == id {
 			tc.tt.Remove(e)
-			v.C <- chanl{signal: TIMEOUTASK}
+			v.C <- Chanl{signal: TIMEOUTASK}
 			return nil
 		}
 		e = e.Next()

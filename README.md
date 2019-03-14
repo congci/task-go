@@ -1,25 +1,22 @@
 # task_go
 >version 2.0.0
-> 时间轮 + 默认定时器、如果为默认的、也就是一个任务一个定时器、其实golang底层是最小堆 + channel实现的
+> 时间轮 循环时间轮上的槽、如果cycle_num 为0 则代表过期执行、cycle_num 代表执行
+>  默认定时器、其实golang底层是最小堆 + channel实现的\最小堆上注册、然后每次取最小值、然后sleep、然后发送channel、
+> 最小堆
 > 选择方式 task.NewTask()
 
 **methods*
 
 
 > 加的函数
-- AddOnlyTask 加任务（这个是各个任务开始加载初始任务的时候调用、在执行过程中不能调用、）
-- SetDefaultTaskName 设置默认任务名称
-- SetDefaultTaskFunc 设置单个任务执行函数
-- SetDefaultTaskEndFunc 设置单个任务结束函数
-- SetAllDefaultTaskFunc 重置全部任务执行函数
-- SetAllDefaultTaskEndFunc 重置全部任务结束函数
-- Server 设置监听、可以接口加/更新/删除/获取状态 
-- AddTc 添加任务 可执行过程中加 [注意、执行过程中慎用、会造成循环添加、]
+- AddOnlyTask 加任务（只加入准备队列、不会执行）
+- AddTc 添加任务
 - UpdateTc 修改任务
 - DelTc 删除任务
 - GetAllTasks 获取全部任务
 
-> 另外支持 接口 增删改操作
+> 建议支持接口 增删改操作 需要自己实现对应task的执行赋值
+
 ```
     http.HandleFunc("/pushsub", addTc)      //增加任务
 	http.HandleFunc("/updatesub", updateTc) //更新任务
@@ -28,10 +25,6 @@
 ```
 
 
-> 多任务的实现：任务执行和结束函数都是用注入到map中来做的、用户可以设置默认任务名称、那个任务的执行函数和结束函数那么加入的任务就不需要设置taskName字段、系统会自动筛选出来执行
-
-> 执行任务和结束任务没有的话会执行系统函数、输出hello world
-> 自定义创建结构体 要包含 Task 结构体、其他的扩展字段可以自己扩展、加入的的task会存储到taskstr字段中保存、用户各个任务结构体解析和开发
 > 必须有cycle、Duration、create_time 字段 create_time 格式是2006-01-02 15:04:05
 
 **eg**
@@ -44,32 +37,6 @@ const (
 
 ```
 
-```
-package main
-
-import (
-	"flag"
-	"opinion-monitor/cmd/subscript/tasks/topic"
-
-	taskx "github.com/congci/task-go"
-)
-
-var port = flag.String("port", "0.0.0.0:8001", "port set")
-
-func main() {
-	flag.Parse()
-
-	task := taskx.NewTask(taskx.TIMECHANNEL)
-	//设置初始任务 加载初始任务
-	task.LoadTasks()
-	//设置topic任务的函数
-	task.SetDefaultTaskName("topic")
-	task.SetDefaultTaskFunc("topic", topic.RunDo)
-	task.SetDefaultTaskEndFunc("topic", topic.ChangeStatus)
-	task.Start()
-	task.Server(*port)
-}
-```
 
 
 
@@ -88,24 +55,9 @@ func main() {
 
 > 结构体可以直接用类型别名  
 ```
- type TimeTask = taskx.TimeTask
-```
-**自定义结构体**
-
-> 自定义结构体只要包含Task结构体既可
-> Task 必须和自定义结构同级、不能加json
+ type TimeTask = task.Task
 ```
 
-import (
-	taskx "github.com/congci/task-go"
-)
+> 任务需要是task结构体 然后可以有扩展字段
 
-type Task = taskx.Task
-type Topic struct{
-	Task              
-	Mustcon string `json:"mustcon"`
-	MustNotCon string `json:"must_not_con"`
-}
-```
-
-//增加删除都是在 主线程
+> 增加删除都是在 主线程、因此不需要加锁、分发的协程仅仅是执行

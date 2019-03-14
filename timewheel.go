@@ -1,4 +1,7 @@
 //时间轮 实现的超时
+//原理 轮询时间轮、每秒走一个槽、然后遍历槽上链表看是否过期
+//重点是判断任务放在哪个槽上
+
 package task
 
 import (
@@ -13,24 +16,18 @@ type Timewheel struct {
 	tt           *list.List //主要是初始化的时候的任务
 	solts        []*list.List
 	slotsNum     int
-	T            *time.Ticker     //定时器
-	C            chan interface{} //定时器传值
-	currentTick  int              //现在的时针
-	tickduration time.Duration    //间隔
-	taskmap      map[int]int      //task的id映射在槽的index
-}
-
-type TimeWTask struct {
-	cyclenum int //第几圈
-	index    int //索引
-	*Task
+	T            *time.Ticker //定时器
+	C            chan Chanl   //定时器传值
+	currentTick  int          //现在的时针
+	tickduration int          //间隔
+	taskmap      map[int]int  //task的id映射在槽的index
 }
 
 var rww sync.RWMutex
 
 var taskIndexMap map[int]int //任务和index的对应关系
 
-func (tw *Timewheel) LoadTasks() {
+func (tw *Timewheel) prestart() {
 	if tw.tt.Len() == 0 {
 		return
 	}
@@ -58,7 +55,9 @@ func (tw *Timewheel) LoadTasks() {
 		v := e.Value.(*Task)
 		if v.Interrupted == 1 {
 			time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
-				tw.do(v)
+				var tmp TimeTask
+				tmp.Task = v
+				do(&tmp)
 				//加入队伍
 				tw.addTc(v)
 			})
@@ -66,32 +65,35 @@ func (tw *Timewheel) LoadTasks() {
 			tw.addTc(v)
 		}
 	}
-
 }
 
 func (tw *Timewheel) Start() {
+	tw.prestart()
 	for {
 		select {
 		case <-tw.T.C:
 			//每秒执行一次循环
 			tw.Exec()
-		case data := <-tw.C:
-			d := data.(chanl)
-			//增加
-			if d.signal == ADDTASK {
-				tw.addTc((*Task)(d.data))
-			}
-			//更新
-			if d.signal == UPDATETASK {
-				tw.updateTc((*Task)(d.data))
-			}
-			//删除
-			if d.signal == DELTASK {
-				tw.delTc(*(*int)(d.data))
-			}
+		case d := <-tw.C:
+			tw.action(d)
 		}
 	}
+}
 
+//如果有值
+func (tw *Timewheel) action(d Chanl) {
+	//增加
+	if d.signal == ADDTASK {
+		tw.addTc((*Task)(d.data))
+	}
+	//更新
+	if d.signal == UPDATETASK {
+		tw.updateTc((*Task)(d.data))
+	}
+	//删除
+	if d.signal == DELTASK {
+		tw.delTc(*(*int)(d.data))
+	}
 }
 
 func newTimeWheel() *Timewheel {
@@ -102,12 +104,16 @@ func newTimeWheel() *Timewheel {
 
 //list表
 func (tw *Timewheel) initT() {
-	for k, _ := range tw.solts {
-		tw.solts[k] = list.New()
+	tw.slotsNum = 3600
+	tw.solts = make([]*list.List, tw.slotsNum)
+	for i := 0; i < tw.slotsNum; i++ {
+		tw.solts[i] = list.New()
 	}
-
+	tw.tt = list.New()
+	tw.currentTick = 0
+	tw.tickduration = 1
 	tw.taskmap = make(map[int]int)
-	c := make(chan interface{}, 1)
+	c := make(chan Chanl, 1)
 	tw.T = time.NewTicker(1 * time.Second)
 	tw.C = c
 }
@@ -115,72 +121,83 @@ func (tw *Timewheel) initT() {
 //循环处理
 //检查每个任务的cycle_num 如果是 0 则 执行、否则 -1
 func (tw *Timewheel) Exec() {
-	if tw.currentTick < tw.slotsNum {
-		tw.currentTick++
-	}
-	if tw.currentTick == tw.slotsNum-1 {
-		tw.currentTick = 0
-	}
 	ll := tw.solts[tw.currentTick]
 	if ll == nil {
 		return
 	}
 	for e := ll.Front(); e != nil; {
-		v := e.Value.(*TimeWTask)
+		v := e.Value.(*TimeTask)
 		if v.cyclenum != 0 {
 			v.cyclenum--
+			e = e.Next()
 		} else {
 			//如果是0、则执行、并且删除、如果不是delay而是tick则再次创建
+			n := e.Next()
 			ll.Remove(e)
-			if v.Task.Delay == 0 {
-				tw.AddTc(v.Task)
+			go do(v)
+			// 不是延时 并且没有过期
+			if _, ok := tw.taskmap[v.Id]; ok {
+				delete(tw.taskmap, v.Id)
 			}
-			go tw.do(v.Task)
+			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
+				tw.addTc(v.Task)
+			}
+			e = n
 		}
-		e = e.Next()
+	}
+	if tw.currentTick < tw.slotsNum-1 {
+		tw.currentTick++
+	}
+	if tw.currentTick == tw.slotsNum-1 {
+		tw.currentTick = 0
 	}
 }
 
-func (tw *Timewheel) do(task *Task) {
-
-}
-
+//实现接口
 //添加
-func (tw *Timewheel) AddTc(task *Task) error {
-	tw.C <- chanl{signal: ADDTASK, data: unsafe.Pointer(task)}
+func (tw *Timewheel) AddTc(t *Task) error {
+	tw.C <- Chanl{signal: ADDTASK, data: unsafe.Pointer(t)}
 	return nil
 }
 
 //添加
 func (tw *Timewheel) addTc(task *Task) error {
-	var tmp TimeWTask
+	formatTask(task)
+	var tmp TimeTask
 	d := task.Duration //按照秒
 	tmp.cyclenum = int(d) / tw.slotsNum
-	pos := (tw.currentTick + int(task.Duration)/int(tw.tickduration.Seconds())) % tw.slotsNum
+	pos := (tw.currentTick + int(task.Duration)/tw.tickduration) % tw.slotsNum
+
 	tmp.index = pos
+	tmp.Task = task
+	if task.Id != 0 {
+		tw.taskmap[task.Id] = pos
+	}
 	tw.solts[pos].PushBack(&tmp)
 	return nil
 }
 
 func (tw *Timewheel) AddOnlyTask(task *Task) {
+	formatTask(task)
 	tw.tt.PushBack(task)
 }
 
 //删除
 func (tw *Timewheel) DelTc(id int) error {
-	tw.C <- chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
+	tw.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
 	return nil
 }
 
 //删除
 func (tw *Timewheel) delTc(id int) error {
 	if index, ok := tw.taskmap[id]; ok {
+		delete(tw.taskmap, id)
 		for e := tw.solts[index].Front(); e != nil; {
-			v := e.Value.(*TimeWTask)
+			v := e.Value.(*TimeTask)
 			if v.Task.Id == id {
 				tw.solts[index].Remove(e)
+				break
 			}
-			break
 		}
 	}
 	return nil
@@ -188,16 +205,18 @@ func (tw *Timewheel) delTc(id int) error {
 
 //更新
 func (tw *Timewheel) UpdateTc(task *Task) error {
-	tw.C <- chanl{signal: DELTASK, data: unsafe.Pointer(task)}
+	tw.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(task)}
 	return nil
 }
 
 //更新
 func (tw *Timewheel) updateTc(task *Task) error {
 	id := task.Id
+	formatTask(task)
+
 	if index, ok := tw.taskmap[id]; ok {
 		for e := tw.solts[index].Front(); e != nil; {
-			v := e.Value.(*TimeWTask)
+			v := e.Value.(*TimeTask)
 			//直接删除、然后新建
 			if v.Task.Id == id {
 				tw.solts[index].Remove(e)
@@ -214,7 +233,7 @@ func (tc *Timewheel) GetAllTasks() []*Task {
 	var tmp []*Task
 	for _, v := range tc.solts {
 		for e := v.Front(); e != nil; e = e.Next() {
-			val := e.Value.(*TimeWTask)
+			val := e.Value.(*TimeTask)
 			tmp = append(tmp, val.Task)
 		}
 	}

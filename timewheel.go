@@ -31,27 +31,25 @@ func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 	now := time.Now().Unix()
 	//如果任务已经结束、则忽略
 	if t.Create_time == 0 {
-		t.StartTaskTime = now
-	}
-	if t.StartTaskTime == 0 {
-		t.StartTaskTime = now
+		t.Create_time = now
 	}
 
-	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
+	if t.Cycle != -1 && t.Create_time+t.Cycle < now {
 		return
 	}
 	//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
-	if (t.EndTime != 0 && t.EndTime < now) || (t.StartTime != 0 && t.StartTime < now-t.Duration) {
+	if (t.EndTime != 0 && t.EndTime < now) || (t.StartTime != 0 && t.StartTime < now-t.Duration) || (t.StartTime == 0 && t.EndTime == 0) {
 		t.StartTime = now
 		t.EndTime = now + t.Duration
 	}
 	//任务中断过
-	if t.EndTime != 0 && (now > t.StartTime && t.EndTime > now && t.EndTime-now > 0 && t.EndTime-now < t.Duration) {
+	if t.EndTime != 0 && (now > t.StartTime && t.EndTime > now && t.StartTime > now-t.Duration && t.EndTime-now < t.Duration) {
 		log.Print("delay Tc" + t.TaskStr)
+		//走信号
 		time.AfterFunc(time.Duration(t.EndTime-now)*time.Second, func() {
 			do(t)
 			//加入队伍
-			tw.newTask(t)
+			tw.AddTc(t.Task)
 		})
 	} else {
 		tw.newTask(t)
@@ -129,7 +127,7 @@ func (tw *Timewheel) Exec() {
 			if _, ok := tw.taskmap[v.Id]; ok {
 				delete(tw.taskmap, v.Id)
 			}
-			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
+			if (v.Task.Delay == 0 && v.Create_time+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
 				tw.addTc(v.Task)
 			} else {
 				//过期

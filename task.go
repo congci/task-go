@@ -35,14 +35,11 @@ type Task struct {
 	Cycle    int64 `json:"cycle"`    //如果是-1则永远不停、生命周期
 
 	Create_time int64 `json:"create_time"` //创建时间、如果没有则为当前时间
-	Update_time int64 `json:"update_time"` //更新时间
 
 	Command string `json:"common"` //如果有common代表是命令模式
 
 	Func    func(*Task)        `json:"-"` //执行函数
 	EndFunc func(*Task, Chanl) `json:"-"` //结束函数
-
-	StartTaskTime int64 `json:"starttasktime"` //任务开始时间
 
 	Interrupted int8 `json:"interrupted"` //第一次导入的时候看是否中断过
 }
@@ -117,7 +114,7 @@ func do(t *TimeTask) {
 	}()
 	t.Num++
 	//此处判断是否过期
-	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < time.Now().Unix() {
+	if t.Cycle != -1 && t.Create_time+t.Cycle < time.Now().Unix() {
 		if t.C != nil {
 			t.C <- Chanl{Signal: TIMEOUTASK, Data: unsafe.Pointer(t)}
 		}
@@ -137,6 +134,8 @@ func do(t *TimeTask) {
 
 	if t.Func != nil {
 		t.Func(t.Task)
+		//执行完、则自动加周期
+		UpdateTimeClock(t.Task)
 		return
 	}
 	runDo(t.Task)
@@ -154,10 +153,8 @@ func end(t *Task, stop Chanl) {
 
 //更新每次开始结束事件、时钟操作
 func UpdateTimeClock(t *Task) {
-	sn := time.Now().Unix()
-	enn := sn + t.Duration
-	t.StartTime = sn
-	t.EndTime = enn
+	t.StartTime += t.Duration
+	t.EndTime = t.StartTime + t.Duration
 }
 
 //任务成功

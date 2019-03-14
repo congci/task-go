@@ -14,6 +14,12 @@ type TaskTime struct {
 
 var as = false
 
+//任务执行池
+type taskqueue struct {
+	queue chan unsafe.Pointer
+	num   int
+}
+
 //任务通用结构体
 type Task struct {
 	Id       int         `json:"id"`        //id 不能重复

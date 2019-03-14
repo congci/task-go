@@ -21,6 +21,7 @@ type Timewheel struct {
 	currentTick  int          //现在的时针
 	tickduration int          //间隔
 	taskmap      map[int]int  //task的id映射在槽的index
+	taskqueue    taskqueue    //任务池
 }
 
 var rww sync.RWMutex
@@ -56,6 +57,16 @@ func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 	}
 }
 
+//如果有任务进来、则执行
+func (tw *Timewheel) Execs() {
+	for {
+		select {
+		case data := <-tw.taskqueue.queue:
+			t := (*TimeTask)(data)
+			do(t)
+		}
+	}
+}
 func (tw *Timewheel) Start() {
 	as = true
 	for {
@@ -98,6 +109,15 @@ func (tw *Timewheel) initT() {
 	for i := 0; i < tw.slotsNum; i++ {
 		tw.solts[i] = list.New()
 	}
+	tw.taskqueue.num = 4
+
+	//代表启动任务池
+	if tw.taskqueue.num != 0 {
+		tw.taskqueue.queue = make(chan unsafe.Pointer, 1000)
+		for i := 0; i < tw.taskqueue.num; i++ {
+			go tw.Execs()
+		}
+	}
 	tw.currentTick = 0
 	tw.tickduration = 1
 	tw.taskmap = make(map[int]int)
@@ -122,7 +142,14 @@ func (tw *Timewheel) Exec() {
 			//如果是0、则执行、并且删除、如果不是delay而是tick则再次创建
 			n := e.Next()
 			ll.Remove(e)
-			go do(v)
+			//如果有协程池、则走任务执行池
+			if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
+				//因为都是主协操作、因此不用考虑其他情况
+				tw.taskqueue.queue <- unsafe.Pointer(v)
+			} else {
+				//如果不走协程池或者队列满了、则新开新的现场
+				go do(v)
+			}
 			// 不是延时 并且没有过期
 			if _, ok := tw.taskmap[v.Id]; ok {
 				delete(tw.taskmap, v.Id)

@@ -83,16 +83,16 @@ func (tw *Timewheel) Start() {
 //如果有值
 func (tw *Timewheel) action(d Chanl) {
 	//增加
-	if d.signal == ADDTASK {
-		tw.addTc((*Task)(d.data))
+	if d.Signal == ADDTASK {
+		tw.addTc((*Task)(d.Data))
 	}
 	//更新
-	if d.signal == UPDATETASK {
-		tw.updateTc((*Task)(d.data))
+	if d.Signal == UPDATETASK {
+		tw.updateTc((*Task)(d.Data))
 	}
 	//删除
-	if d.signal == DELTASK {
-		tw.delTc(*(*int)(d.data))
+	if d.Signal == DELTASK {
+		tw.delTc(*(*int)(d.Data))
 	}
 }
 
@@ -156,7 +156,7 @@ func (tw *Timewheel) Exec() {
 //实现接口
 //添加
 func (tw *Timewheel) AddTc(t *Task) error {
-	tw.C <- Chanl{signal: ADDTASK, data: unsafe.Pointer(t)}
+	tw.C <- Chanl{Signal: ADDTASK, Data: unsafe.Pointer(t)}
 	return nil
 }
 
@@ -184,7 +184,7 @@ func (tw *Timewheel) AddOnlyTask(task *Task) {
 
 //删除
 func (tw *Timewheel) DelTc(id int) error {
-	tw.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
+	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&id)}
 	return nil
 }
 
@@ -205,7 +205,7 @@ func (tw *Timewheel) delTc(id int) error {
 
 //更新
 func (tw *Timewheel) UpdateTc(task *Task) error {
-	tw.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(task)}
+	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(task)}
 	return nil
 }
 

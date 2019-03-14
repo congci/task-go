@@ -12,6 +12,8 @@ type TaskTime struct {
 	Timewheel
 }
 
+var as = false
+
 //任务通用结构体
 type Task struct {
 	Id       int         `json:"id"`        //id 不能重复
@@ -81,7 +83,6 @@ type TT interface {
 	UpdateTc(task *Task) error
 	DelTc(id int) error
 	GetAllTasks() []*Task
-	AddOnlyTask(task *Task)
 	Start()
 }
 
@@ -118,10 +119,11 @@ func do(t *TimeTask) {
 	//此处判断是否过期
 	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < time.Now().Unix() {
 		if t.C != nil {
-			t.C <- Chanl{Signal: TIMEOUTASK}
+			t.C <- Chanl{Signal: TIMEOUTASK, Data: unsafe.Pointer(t)}
 		}
 		return
 	}
+
 	if t.Command != "" {
 		cmd := exec.Command(t.Command)
 		if _, err := cmd.Output(); err != nil {
@@ -166,22 +168,4 @@ func SuccessTask(t *Task) {
 //任务失败
 func FailTask(t *Task) {
 	t.FailNum++
-}
-
-func formatTask(task *Task) {
-	//根据条件设置对应的func
-	now := time.Now().Unix()
-	if task.Create_time == 0 {
-		task.StartTaskTime = now
-	}
-	if task.StartTaskTime == 0 {
-		task.StartTaskTime = now
-	}
-
-	if task.StartTime == 0 {
-		task.StartTime = now
-	}
-	if task.EndTime == 0 {
-		task.EndTime = now + task.Duration
-	}
 }

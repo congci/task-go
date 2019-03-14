@@ -6,6 +6,7 @@ package task
 
 import (
 	"container/list"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 )
 
 type Timewheel struct {
-	tt           *list.List //主要是初始化的时候的任务
 	solts        []*list.List
 	slotsNum     int
 	T            *time.Ticker //定时器
@@ -27,51 +27,45 @@ var rww sync.RWMutex
 
 var taskIndexMap map[int]int //任务和index的对应关系
 
-func (tw *Timewheel) prestart() {
-	if tw.tt.Len() == 0 {
+func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
+	now := time.Now().Unix()
+	//如果任务已经结束、则忽略
+	if t.Create_time == 0 {
+		t.StartTaskTime = now
+	}
+	if t.StartTaskTime == 0 {
+		t.StartTaskTime = now
+	}
+
+	if t.StartTime == 0 {
+		t.StartTime = now
+	}
+	if t.EndTime == 0 {
+		t.EndTime = now + t.Duration
+	}
+	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
 		return
 	}
-	//结束时间 - 当前时间 定时器执行、如果到了时间执行对应的操作、然后tick、保证接上以前的任务
-	now := time.Now().Unix()
-	for e := tw.tt.Front(); e != nil; e = e.Next() {
-		v := e.Value.(*Task)
-		//如果任务已经结束、则忽略
-		if v.Cycle != -1 && v.StartTaskTime+v.Cycle < now {
-			continue
-		}
-		//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
-		if (v.EndTime != 0 && v.EndTime < now) || (v.StartTime != 0 && v.StartTime < now-v.Duration) {
-			v.StartTime = now
-			v.EndTime = now + v.Duration
-		}
-		//任务中断过
-		if v.EndTime != 0 && (now > v.StartTime && v.EndTime > now && v.EndTime-now > 0 && v.EndTime-now < v.Duration) {
-			log.Print("delay Tc" + v.TaskStr)
-			v.Interrupted = 1
-		}
+	//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
+	if (t.EndTime != 0 && t.EndTime < now) || (t.StartTime != 0 && t.StartTime < now-t.Duration) {
+		t.StartTime = now
+		t.EndTime = now + t.Duration
 	}
-
-	for e := tw.tt.Front(); e != nil; e = e.Next() {
-		v := e.Value.(*Task)
-		if v.Interrupted == 1 {
-			func(*Task) {
-				time.AfterFunc(time.Duration(v.EndTime-now)*time.Second, func() {
-					var tmp TimeTask
-					tmp.Task = v
-					do(&tmp)
-					//加入队伍
-					tw.addTc(v)
-				})
-			}(v)
-
-		} else {
-			tw.addTc(v)
-		}
+	//任务中断过
+	if t.EndTime != 0 && (now > t.StartTime && t.EndTime > now && t.EndTime-now > 0 && t.EndTime-now < t.Duration) {
+		log.Print("delay Tc" + t.TaskStr)
+		time.AfterFunc(time.Duration(t.EndTime-now)*time.Second, func() {
+			do(t)
+			//加入队伍
+			tw.newTask(t)
+		})
+	} else {
+		tw.newTask(t)
 	}
 }
 
 func (tw *Timewheel) Start() {
-	tw.prestart()
+	as = true
 	for {
 		select {
 		case <-tw.T.C:
@@ -112,7 +106,6 @@ func (tw *Timewheel) initT() {
 	for i := 0; i < tw.slotsNum; i++ {
 		tw.solts[i] = list.New()
 	}
-	tw.tt = list.New()
 	tw.currentTick = 0
 	tw.tickduration = 1
 	tw.taskmap = make(map[int]int)
@@ -144,6 +137,9 @@ func (tw *Timewheel) Exec() {
 			}
 			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
 				tw.addTc(v.Task)
+			} else {
+				//过期
+				v.EndFunc(v.Task, Chanl{})
 			}
 			e = n
 		}
@@ -159,35 +155,37 @@ func (tw *Timewheel) Exec() {
 //实现接口
 //添加
 func (tw *Timewheel) AddTc(t *Task) error {
+	if !as {
+		tw.addTc(t)
+		return nil
+	}
 	tw.C <- Chanl{Signal: ADDTASK, Data: unsafe.Pointer(t)}
 	return nil
+}
+func (tw *Timewheel) newTask(t *TimeTask) {
+	t.Interrupted = 0
+	d := t.Duration //按照秒
+	t.cyclenum = int(d) / tw.slotsNum
+	pos := (tw.currentTick + int(t.Duration)/tw.tickduration) % tw.slotsNum
+	if t.Id != 0 {
+		tw.taskmap[t.Id] = pos
+	}
+	tw.solts[pos].PushBack(t)
 }
 
 //添加
 func (tw *Timewheel) addTc(task *Task) error {
-	formatTask(task)
 	var tmp TimeTask
-	d := task.Duration //按照秒
-	tmp.cyclenum = int(d) / tw.slotsNum
-	pos := (tw.currentTick + int(task.Duration)/tw.tickduration) % tw.slotsNum
-
-	task.Interrupted = 0
-	tmp.index = pos
 	tmp.Task = task
-	if task.Id != 0 {
-		tw.taskmap[task.Id] = pos
-	}
-	tw.solts[pos].PushBack(&tmp)
+	tw.CheckAndAddTask(&tmp)
 	return nil
-}
-
-func (tw *Timewheel) AddOnlyTask(task *Task) {
-	formatTask(task)
-	tw.tt.PushBack(task)
 }
 
 //删除
 func (tw *Timewheel) DelTc(id int) error {
+	if !as {
+		return errors.New("")
+	}
 	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&id)}
 	return nil
 }
@@ -209,6 +207,9 @@ func (tw *Timewheel) delTc(id int) error {
 
 //更新
 func (tw *Timewheel) UpdateTc(task *Task) error {
+	if !as {
+		return errors.New("")
+	}
 	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(task)}
 	return nil
 }
@@ -216,8 +217,6 @@ func (tw *Timewheel) UpdateTc(task *Task) error {
 //更新
 func (tw *Timewheel) updateTc(task *Task) error {
 	id := task.Id
-	formatTask(task)
-
 	if index, ok := tw.taskmap[id]; ok {
 		for e := tw.solts[index].Front(); e != nil; {
 			v := e.Value.(*TimeTask)
@@ -225,7 +224,7 @@ func (tw *Timewheel) updateTc(task *Task) error {
 			if v.Task.Id == id {
 				tw.solts[index].Remove(e)
 			}
-			tw.AddTc(task)
+			tw.addTc(task)
 			break
 		}
 	}
@@ -235,18 +234,10 @@ func (tw *Timewheel) updateTc(task *Task) error {
 //获取全部task、包括开始中断中的
 func (tw *Timewheel) GetAllTasks() []*Task {
 	var tmp []*Task
-	//准备任务加上
-	for iter := tw.tt.Back(); iter != nil; iter = iter.Prev() {
-		v := iter.Value.(*TimeTask)
-		tmp = append(tmp, v.Task)
-	}
-
 	for _, v := range tw.solts {
 		for e := v.Front(); e != nil; e = e.Next() {
 			val := e.Value.(*TimeTask)
-			if val.Task.Interrupted == 0 {
-				tmp = append(tmp, val.Task)
-			}
+			tmp = append(tmp, val.Task)
 		}
 	}
 	return tmp

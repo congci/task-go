@@ -82,16 +82,16 @@ func (tc *Timechannel) Start() {
 			// tc.check() 数量小还可以、数量很大的话主协程不能这么做、只能在时间到了加
 		case d := <-tc.C:
 			//增加
-			if d.signal == ADDTASK {
-				tc.addTc((*Task)(d.data))
+			if d.Signal == ADDTASK {
+				tc.addTc((*Task)(d.Data))
 			}
 			//更新
-			if d.signal == UPDATETASK {
-				tc.updateTc((*Task)(d.data))
+			if d.Signal == UPDATETASK {
+				tc.updateTc((*Task)(d.Data))
 			}
 			//删除
-			if d.signal == DELTASK {
-				tc.delTc(*(*int)(d.data))
+			if d.Signal == DELTASK {
+				tc.delTc(*(*int)(d.Data))
 			}
 		}
 	}
@@ -112,7 +112,7 @@ func (tc *Timechannel) newDelayTak(t *TimeTask) {
 				//任务的task
 				do(t)
 			case stop := <-t.C:
-				if DELTASK == stop.signal {
+				if DELTASK == stop.Signal {
 					return
 				}
 				//删除操作
@@ -148,7 +148,7 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 				//任务的task
 				do(t)
 			case stop := <-t.C:
-				if stop.signal == UPDATETASK {
+				if stop.Signal == UPDATETASK {
 					return
 				}
 				for e := tc.tt.Front(); e != nil; {
@@ -172,7 +172,7 @@ func (tc *Timechannel) check() {
 		t := e.Value.(*TimeTask)
 		if (t.Cycle != -1 && t.StartTaskTime+t.Cycle < now) || (t.LimitNum != 0 && t.Num > t.LimitNum) {
 			//发送数据
-			t.C <- Chanl{signal: TIMEOUTASK}
+			t.C <- Chanl{Signal: TIMEOUTASK}
 			tc.tt.Remove(e)
 		}
 		e = e.Next()
@@ -192,7 +192,7 @@ func (tc *Timechannel) AddOnlyTask(t *Task) {
 
 //更新
 func (tc *Timechannel) UpdateTc(task *Task) error {
-	tc.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(task)}
+	tc.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(task)}
 	return nil
 }
 
@@ -204,7 +204,7 @@ func (tc *Timechannel) updateTc(task *Task) error {
 		v := e.Value.(*TimeTask)
 		if v.Id == task.Id {
 			tc.tt.Remove(e)
-			v.C <- Chanl{signal: TIMEOUTASK}
+			v.C <- Chanl{Signal: TIMEOUTASK}
 			tc.addTc(task)
 			return nil
 		}
@@ -216,7 +216,7 @@ func (tc *Timechannel) updateTc(task *Task) error {
 
 //添加
 func (tc *Timechannel) AddTc(task *Task) error {
-	tc.C <- Chanl{signal: ADDTASK, data: unsafe.Pointer(task)}
+	tc.C <- Chanl{Signal: ADDTASK, Data: unsafe.Pointer(task)}
 	return nil
 }
 
@@ -232,7 +232,7 @@ func (tc *Timechannel) addTc(t *Task) error {
 
 //删除任务
 func (tc *Timechannel) DelTc(id int) error {
-	tc.C <- Chanl{signal: DELTASK, data: unsafe.Pointer(&id)}
+	tc.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&id)}
 	return nil
 }
 
@@ -243,7 +243,7 @@ func (tc *Timechannel) delTc(id int) error {
 		v := e.Value.(*TimeTask)
 		if v.Id == id {
 			tc.tt.Remove(e)
-			v.C <- Chanl{signal: TIMEOUTASK}
+			v.C <- Chanl{Signal: TIMEOUTASK}
 			return nil
 		}
 		e = e.Next()

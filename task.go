@@ -71,8 +71,8 @@ const (
 
 //传输的结构体
 type Chanl struct {
-	signal int
-	data   unsafe.Pointer
+	Signal int
+	Data   unsafe.Pointer
 }
 
 //返回的结构体
@@ -118,7 +118,7 @@ func do(t *TimeTask) {
 	//此处判断是否过期
 	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < time.Now().Unix() {
 		if t.C != nil {
-			t.C <- Chanl{signal: TIMEOUTASK}
+			t.C <- Chanl{Signal: TIMEOUTASK}
 		}
 		return
 	}

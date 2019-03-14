@@ -37,12 +37,6 @@ func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 		t.StartTaskTime = now
 	}
 
-	if t.StartTime == 0 {
-		t.StartTime = now
-	}
-	if t.EndTime == 0 {
-		t.EndTime = now + t.Duration
-	}
 	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
 		return
 	}

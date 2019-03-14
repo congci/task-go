@@ -168,6 +168,7 @@ func (tw *Timewheel) addTc(task *Task) error {
 	tmp.cyclenum = int(d) / tw.slotsNum
 	pos := (tw.currentTick + int(task.Duration)/tw.tickduration) % tw.slotsNum
 
+	task.Interrupted = 0
 	tmp.index = pos
 	tmp.Task = task
 	if task.Id != 0 {
@@ -231,10 +232,18 @@ func (tw *Timewheel) updateTc(task *Task) error {
 //获取全部task、包括开始中断中的
 func (tw *Timewheel) GetAllTasks() []*Task {
 	var tmp []*Task
+	//准备任务加上
+	for iter := tw.tt.Back(); iter != nil; iter = iter.Prev() {
+		v := iter.Value.(*TimeTask)
+		tmp = append(tmp, v.Task)
+	}
+
 	for _, v := range tw.solts {
 		for e := v.Front(); e != nil; e = e.Next() {
 			val := e.Value.(*TimeTask)
-			tmp = append(tmp, val.Task)
+			if val.Task.Interrupted == 0 {
+				tmp = append(tmp, val.Task)
+			}
 		}
 	}
 	return tmp

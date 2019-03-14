@@ -129,13 +129,13 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 	if t.Duration == 0 {
 		t.Duration = DefaultDuration
 	}
+	//然后将中断恢复
+	t.Interrupted = 0
 	if t.Delay != 0 {
 		tc.newDelayTak(t)
 		return
 	}
 
-	//然后将中断恢复
-	t.Interrupted = 0
 	ticker := time.NewTicker(time.Duration(t.Duration) * time.Second)
 	c := make(chan Chanl, 1)
 	t.T = ticker

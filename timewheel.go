@@ -105,6 +105,19 @@ func newTimeWheel(p *Param) *Timewheel {
 			Tickduration: 1 * time.Second, //默认一秒都一次
 		}
 	}
+
+	if p.SlotsNum == 0 {
+		p.SlotsNum = DEFAULTSOLTSNUM
+	}
+
+	if p.QueueCap == 0 {
+		p.QueueCap = QueueCap
+	}
+
+	if p.Tickduration == 0 {
+		p.Tickduration = 1 * time.Second
+	}
+
 	t := new(Timewheel)
 	t.slotsNum = p.SlotsNum
 	t.solts = make([]*list.List, t.slotsNum)

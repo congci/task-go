@@ -78,3 +78,13 @@ const (
 
 **注意**
 >现在的golang默认的定时器实现是不适合大规模任务的、golang底层虽然会复用已经创建的协程、但是还是有撑爆内存的风险、
+
+```
+type Param struct {
+	SlotsNum     int           //时间轮大小
+	QueueNum     int           //时间轮协程池内的数量
+	Tickduration time.Duration //时间轮多长时间走一次、暂时按秒
+	QueueCap     int           //轮协程池队列channel的容量、注意是总量
+}
+
+```

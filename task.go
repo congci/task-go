@@ -22,9 +22,9 @@ type taskqueue struct {
 
 //任务通用结构体
 type Task struct {
-	Tid        string   `json:"tid"` //tid 任务唯一标志符、不能重复 //不取id避免和业务冲突
-	Bid        string   `json:"bid"` //可能是业务id
-	ExTendTids []string `json:"-"`   //一个任务可能有附带的任务、关联的tid、可以一起删除等
+	Tid        string   `json:"tid"`       //tid 任务唯一标志符、不能重复 //不取id避免和业务冲突
+	Bid        string   `json:"bid"`       //可能是业务id
+	ExTendTids []string `json:"extendtis"` //一个任务可能有附带的任务、关联的tid、可以一起删除等
 
 	Extend interface{} `json:"extend"` // 扩展字段 任务具体任务可能需要
 

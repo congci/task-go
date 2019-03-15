@@ -225,8 +225,8 @@ func (tw *Timewheel) delTc(tid string) error {
 				//如果有附加的小任务、则也直接删除
 				if v.ExTendTids != nil {
 					//循环删除
-					for _, v := range v.ExTendTids {
-						tw.delTc(v)
+					for _, etid := range v.ExTendTids {
+						tw.delTc(etid)
 					}
 				}
 				break

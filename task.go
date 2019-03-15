@@ -28,8 +28,10 @@ type Task struct {
 
 	Extend interface{} `json:"extend"` // 扩展字段 任务具体任务可能需要
 
-	TaskStr string `json:"taskstr"` //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、必须
-	Delay   int    `json:"delay"`   //如果有延时、则代表任务是一次性任务
+	TaskStr  string `json:"taskstr"` //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、可以传这个、传str是为了方便看
+	TaskByte []byte `json:"-"`       //任务执行过程的时候、减少转换解析
+
+	Delay int `json:"delay"` //如果有延时、则代表任务是一次性任务
 
 	Num        uint `json:"num"`         //执行次数 用户状态观察
 	SuccessNum uint `json:"success_num"` //执行成功次数

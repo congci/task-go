@@ -159,8 +159,8 @@ func end(t *Task, stop Chanl) {
 
 //更新每次开始结束事件、时钟操作
 func UpdateTimeClock(t *Task) {
-	t.StartTime += t.Duration
-	t.EndTime = t.StartTime + t.Duration
+	t.StartTime = t.EndTime
+	t.EndTime = t.EndTime + t.Duration
 }
 
 //任务成功

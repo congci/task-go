@@ -41,9 +41,10 @@ func (tc *Timechannel) CheckAndTask(t *TimeTask) {
 		t.EndTime = now + t.Duration
 	}
 
-	//代表第一次添加
+	//第一次添加有延时
 	if t.Delay != 0 {
 		t.Delay = 0
+		//timeafter是另一个协程、因此只能到主操作
 		time.AfterFunc(time.Duration(t.Delay), func() {
 			log.Print("delay Tc" + t.TaskStr)
 			tc.C <- Chanl{Signal: DELAYTASK, Data: unsafe.Pointer(t)}
@@ -108,10 +109,11 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 				if ((t.StartTaskTime+t.Cycle > time.Now().Unix() && t.Cycle != -1) || t.Cycle == -1) && (t.LimitNum == 0 || (t.LimitNum != 0 && t.LimitNum > 1 && t.Num < t.LimitNum)) {
 					//任务的task
 					do(t)
+				} else {
+					//过期直接退出
+					tc.delTc(t.Tid, false) //先删除任务
+					end(t.Task, Chanl{Signal: TIMEOUTASK})
 				}
-				//过期直接退出
-				tc.delTc(t.Tid, false) //先删除任务
-				end(t.Task, Chanl{Signal: TIMEOUTASK})
 			case stop := <-t.C:
 				if stop.Signal == UPDATETASK {
 					return
@@ -128,7 +130,7 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 //更新
 func (tc *Timechannel) UpdateTc(task *Task) error {
 	if !as {
-
+		return errors.New("task no start")
 	}
 	tc.C <- Chanl{Signal: UPDATETASK, Data: unsafe.Pointer(task)}
 	return nil
@@ -141,7 +143,7 @@ func (tc *Timechannel) updateTc(task *Task) error {
 		n := e.Next()
 		if v.Tid == task.Tid {
 			tc.tt.Remove(e)
-			v.C <- Chanl{Signal: TIMEOUTASK}
+			v.C <- Chanl{Signal: UPDATETASK}
 			autoUpdate(task, v.Task)
 			tc.addTc(task)
 			return nil

@@ -217,7 +217,7 @@ func (tw *Timewheel) AddTc(t *Task) error {
 func (tw *Timewheel) newTask(t *TimeTask) {
 	d := t.Duration + t.Delay //按照秒
 	t.cyclenum = int(d) / tw.slotsNum
-	pos := (tw.currentTick + int(t.Duration+t.Delay)/int(tw.tickduration.Seconds())) % tw.slotsNum
+	pos := (tw.currentTick + int(d)/int(tw.tickduration.Seconds())) % tw.slotsNum
 	//如果任务id为0 则生成一个
 	if t.Tid == "" {
 		guid := xid.New().String()
@@ -230,6 +230,9 @@ func (tw *Timewheel) newTask(t *TimeTask) {
 
 //添加
 func (tw *Timewheel) addTc(task *Task) error {
+	if task.Duration == 0 || task.Cycle == 0 {
+		return errors.New("add task fail no du no cy")
+	}
 	var tmp TimeTask
 	tmp.Task = task
 	tw.CheckAndAddTask(&tmp)

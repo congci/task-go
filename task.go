@@ -22,7 +22,7 @@ type taskqueue struct {
 
 //任务通用结构体
 type Task struct {
-	Id       int         `json:"id"`        //id 不能重复
+	Tid      string      `json:"id"`        //id 不能重复 //不取id避免和业务冲突
 	TaskName string      `json:"task_name"` //如果不传有默认
 	TaskStr  string      `json:"taskstr"`   //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、必须
 	Extend   interface{} // 扩展字段 任务具体任务可能需要
@@ -84,7 +84,7 @@ type Chanl struct {
 type TT interface {
 	AddTc(task *Task) error
 	UpdateTc(task *Task) error
-	DelTc(id int) error
+	DelTc(id string) error
 	GetAllTasks() []*Task
 	Start()
 }

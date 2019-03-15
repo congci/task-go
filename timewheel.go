@@ -11,22 +11,22 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/rs/xid"
 )
 
 type Timewheel struct {
 	solts        []*list.List
 	slotsNum     int
-	T            *time.Ticker //定时器
-	C            chan Chanl   //定时器传值
-	currentTick  int          //现在的时针
-	tickduration int          //间隔
-	taskmap      map[int]int  //task的id映射在槽的index
-	taskqueue    taskqueue    //任务池
+	T            *time.Ticker   //定时器
+	C            chan Chanl     //定时器传值
+	currentTick  int            //现在的时针
+	tickduration int            //间隔
+	taskmap      map[string]int //task的id映射在槽的index
+	taskqueue    taskqueue      //任务池
 }
 
 var rww sync.RWMutex
-
-var taskIndexMap map[int]int //任务和index的对应关系
 
 func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 	now := time.Now().Unix()
@@ -92,7 +92,7 @@ func (tw *Timewheel) action(d Chanl) {
 	}
 	//删除
 	if d.Signal == DELTASK {
-		tw.delTc(*(*int)(d.Data))
+		tw.delTc(*(*string)(d.Data))
 	}
 }
 
@@ -120,7 +120,7 @@ func (tw *Timewheel) initT() {
 	}
 	tw.currentTick = 0
 	tw.tickduration = 1
-	tw.taskmap = make(map[int]int)
+	tw.taskmap = make(map[string]int)
 	c := make(chan Chanl, 1)
 	tw.T = time.NewTicker(1 * time.Second)
 	tw.C = c
@@ -151,8 +151,8 @@ func (tw *Timewheel) Exec() {
 				go do(v)
 			}
 			// 不是延时 并且没有过期
-			if _, ok := tw.taskmap[v.Id]; ok {
-				delete(tw.taskmap, v.Id)
+			if _, ok := tw.taskmap[v.Tid]; ok {
+				delete(tw.taskmap, v.Tid)
 			}
 			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
 				tw.addTc(v.Task)
@@ -186,8 +186,11 @@ func (tw *Timewheel) newTask(t *TimeTask) {
 	d := t.Duration //按照秒
 	t.cyclenum = int(d) / tw.slotsNum
 	pos := (tw.currentTick + int(t.Duration)/tw.tickduration) % tw.slotsNum
-	if t.Id != 0 {
-		tw.taskmap[t.Id] = pos
+	//如果任务id为0 则生成一个
+	if t.Tid == "" {
+		guid := xid.New().String()
+		t.Tid = guid
+		tw.taskmap[guid] = pos
 	}
 	tw.solts[pos].PushBack(t)
 }
@@ -201,7 +204,7 @@ func (tw *Timewheel) addTc(task *Task) error {
 }
 
 //删除
-func (tw *Timewheel) DelTc(id int) error {
+func (tw *Timewheel) DelTc(id string) error {
 	if !as {
 		return errors.New("")
 	}
@@ -210,13 +213,13 @@ func (tw *Timewheel) DelTc(id int) error {
 }
 
 //删除
-func (tw *Timewheel) delTc(id int) error {
-	if index, ok := tw.taskmap[id]; ok {
-		delete(tw.taskmap, id)
+func (tw *Timewheel) delTc(tid string) error {
+	if index, ok := tw.taskmap[tid]; ok {
+		delete(tw.taskmap, tid)
 		for e := tw.solts[index].Front(); e != nil; {
 			v := e.Value.(*TimeTask)
 			n := e.Next()
-			if v.Task.Id == id {
+			if v.Task.Tid == tid {
 				tw.solts[index].Remove(e)
 				break
 			}
@@ -237,13 +240,13 @@ func (tw *Timewheel) UpdateTc(task *Task) error {
 
 //更新
 func (tw *Timewheel) updateTc(task *Task) error {
-	id := task.Id
-	if index, ok := tw.taskmap[id]; ok {
+	tid := task.Tid
+	if index, ok := tw.taskmap[tid]; ok {
 		for e := tw.solts[index].Front(); e != nil; {
 			v := e.Value.(*TimeTask)
 			//直接删除、然后新建
 			n := e.Next()
-			if v.Task.Id == id {
+			if v.Task.Tid == tid {
 				tw.solts[index].Remove(e)
 				tw.addTc(task)
 				break

@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 	"unsafe"
+
+	"github.com/rs/xid"
 )
 
 var (
@@ -85,7 +87,7 @@ func (tc *Timechannel) Start() {
 			}
 			//删除
 			if d.Signal == DELTASK {
-				tc.delTc(*(*int)(d.Data))
+				tc.delTc(*(*string)(d.Data))
 			}
 		}
 	}
@@ -168,7 +170,7 @@ func (tc *Timechannel) updateTc(task *Task) error {
 	for e := tc.tt.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
 		n := e.Next()
-		if v.Id == task.Id {
+		if v.Tid == task.Tid {
 			tc.tt.Remove(e)
 			v.C <- Chanl{Signal: TIMEOUTASK}
 			tc.addTc(task)
@@ -193,6 +195,10 @@ func (tc *Timechannel) AddTc(task *Task) error {
 //往任务链表里加数据
 func (tc *Timechannel) addTc(t *Task) error {
 	var tmp TimeTask
+	if t.Tid == "" {
+		guid := xid.New().String()
+		t.Tid = guid
+	}
 	tmp.Task = t
 	tc.CheckAndTask(&tmp)
 	//加入全局
@@ -201,18 +207,18 @@ func (tc *Timechannel) addTc(t *Task) error {
 }
 
 //删除任务
-func (tc *Timechannel) DelTc(id int) error {
-	tc.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&id)}
+func (tc *Timechannel) DelTc(tid string) error {
+	tc.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&tid)}
 	return nil
 }
 
 //
 //删除任务
-func (tc *Timechannel) delTc(id int) error {
+func (tc *Timechannel) delTc(tid string) error {
 	for e := tc.tt.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
 		n := e.Next()
-		if v.Id == id {
+		if v.Tid == tid {
 			tc.tt.Remove(e)
 			v.C <- Chanl{Signal: DELTASK}
 			return nil

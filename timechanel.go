@@ -10,26 +10,17 @@ import (
 	"github.com/rs/xid"
 )
 
-var (
-	//默认间隔
-	DefaultDuration int64 = 3600
-)
-
 //time + channel - 底层是最小堆
 type Timechannel struct {
 	tt *list.List //任务保存的地方
 	C  chan Chanl //主线程通知信号
 }
 
-func newTimeChannel() *Timechannel {
+func newTimeChannel(p *Param) *Timechannel {
 	t := new(Timechannel)
-	t.initT()
+	t.tt = list.New()
+	t.C = make(chan Chanl, 1)
 	return t
-}
-
-func (tc *Timechannel) initT() {
-	tc.tt = list.New()
-	tc.C = make(chan Chanl, 1)
 }
 
 //如果有有开始任务、那么执行
@@ -89,7 +80,7 @@ func (tc *Timechannel) Start() {
 			}
 			//删除
 			if d.Signal == DELTASK {
-				tc.delTc(*(*string)(d.Data))
+				tc.delTc(*(*string)(d.Data), true)
 			}
 
 			//专门处理开始延时的任务
@@ -101,40 +92,9 @@ func (tc *Timechannel) Start() {
 
 }
 
-//延时任务
-func (tc *Timechannel) newDelayTak(t *TimeTask) {
-	ticker := time.NewTimer(time.Duration(t.Duration) * time.Second)
-	c := make(chan Chanl, 1)
-	t.TD = ticker
-	t.C = c
-	go func(t *TimeTask) {
-		defer t.TD.Stop()
-		for {
-			select {
-			case <-t.TD.C:
-				//任务的task
-				do(t)
-			case stop := <-t.C:
-				if UPDATETASK == stop.Signal {
-					return
-				}
-				//删除操作
-				end(t.Task, stop)
-				return
-			}
-		}
-	}(t)
-}
-
 //定时任务
 func (tc *Timechannel) newTask(t *TimeTask) {
 	log.Println("task info:", t)
-
-	//代表是一次性任务、
-	if t.LimitNum == 1 {
-		tc.newDelayTak(t)
-		return
-	}
 
 	ticker := time.NewTicker(time.Duration(t.Duration) * time.Second)
 	c := make(chan Chanl, 1)
@@ -145,8 +105,13 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 		for {
 			select {
 			case <-t.T.C:
-				//任务的task
-				do(t)
+				if ((t.StartTaskTime+t.Cycle > time.Now().Unix() && t.Cycle != -1) || t.Cycle == -1) && (t.LimitNum == 0 || (t.LimitNum != 0 && t.LimitNum > 1 && t.Num < t.LimitNum)) {
+					//任务的task
+					do(t)
+				}
+				//过期直接退出
+				tc.delTc(t.Tid, false) //先删除任务
+				end(t.Task, Chanl{Signal: TIMEOUTASK})
 			case stop := <-t.C:
 				if stop.Signal == UPDATETASK {
 					return
@@ -230,8 +195,8 @@ func (tc *Timechannel) DelTc(tid string) error {
 }
 
 //
-//删除任务
-func (tc *Timechannel) delTc(tid string) error {
+//删除任务\mode为false仅仅指删除
+func (tc *Timechannel) delTc(tid string, mode bool) error {
 	for e := tc.tt.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
 		n := e.Next()
@@ -239,7 +204,7 @@ func (tc *Timechannel) delTc(tid string) error {
 			tc.tt.Remove(e)
 			v.del = 1 //利用指针的特性、为延后加入期间删除的加个开关、如果在timeafter期间删除、则不再加入
 			//延期加入的此时没有c
-			if v.C != nil {
+			if mode && v.C != nil {
 				v.C <- Chanl{Signal: DELTASK}
 			}
 			return nil

@@ -8,12 +8,15 @@ import (
 	"container/list"
 	"errors"
 	"log"
-	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/rs/xid"
 )
+
+//默认槽数量
+const DEFAULTSOLTSNUM = 3600
+const QueueCap = 1000
 
 type Timewheel struct {
 	solts        []*list.List
@@ -21,12 +24,10 @@ type Timewheel struct {
 	T            *time.Ticker   //定时器
 	C            chan Chanl     //定时器传值
 	currentTick  int            //现在的时针
-	tickduration int            //间隔
+	tickduration time.Duration  //间隔
 	taskmap      map[string]int //task的id映射在槽的index
 	taskqueue    taskqueue      //任务池
 }
-
-var rww sync.RWMutex
 
 func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 	now := time.Now().Unix()
@@ -67,8 +68,10 @@ func (tw *Timewheel) Start() {
 	for {
 		select {
 		case <-tw.T.C:
-			//每秒执行一次循环
+			//时间轮指针往前走
 			tw.Exec()
+
+			//执行动作
 		case d := <-tw.C:
 			tw.action(d)
 		}
@@ -91,34 +94,43 @@ func (tw *Timewheel) action(d Chanl) {
 	}
 }
 
-func newTimeWheel() *Timewheel {
-	t := new(Timewheel)
-	t.initT()
-	return t
-}
-
-//list表
-func (tw *Timewheel) initT() {
-	tw.slotsNum = 3600
-	tw.solts = make([]*list.List, tw.slotsNum)
-	for i := 0; i < tw.slotsNum; i++ {
-		tw.solts[i] = list.New()
-	}
-	tw.taskqueue.num = 20
-
-	//代表启动任务池
-	if tw.taskqueue.num != 0 {
-		tw.taskqueue.queue = make(chan unsafe.Pointer, 1000)
-		for i := 0; i < tw.taskqueue.num; i++ {
-			go tw.Execs()
+//默认不走协程池
+func newTimeWheel(p *Param) *Timewheel {
+	//初始
+	if p == nil {
+		p = &Param{
+			SlotsNum:     DEFAULTSOLTSNUM,
+			QueueNum:     0,
+			QueueCap:     QueueCap,
+			Tickduration: 1 * time.Second, //默认一秒都一次
 		}
 	}
-	tw.currentTick = 0
-	tw.tickduration = 1
-	tw.taskmap = make(map[string]int)
+	t := new(Timewheel)
+	t.slotsNum = p.SlotsNum
+	t.solts = make([]*list.List, t.slotsNum)
+	for i := 0; i < t.slotsNum; i++ {
+		t.solts[i] = list.New()
+	}
+
+	t.taskqueue.num = p.QueueNum
+
+	//代表启动任务池
+	if t.taskqueue.num != 0 {
+		t.taskqueue.queue = make(chan unsafe.Pointer, p.QueueCap)
+		for i := 0; i < t.taskqueue.num; i++ {
+			go t.Execs()
+		}
+	}
+
+	t.currentTick = 0
+
+	t.tickduration = p.Tickduration
+
+	t.taskmap = make(map[string]int)
 	c := make(chan Chanl, 1)
-	tw.T = time.NewTicker(1 * time.Second)
-	tw.C = c
+	t.T = time.NewTicker(t.tickduration)
+	t.C = c
+	return t
 }
 
 //循环处理
@@ -147,16 +159,26 @@ func (tw *Timewheel) Exec() {
 				//如果不走协程池或者队列满了、则新开新的现场
 				go do(v)
 			}
-			// 不是延时 并且没有过期
+
+			//重新计算入槽
 			if _, ok := tw.taskmap[v.Tid]; ok {
 				delete(tw.taskmap, v.Tid)
 			}
 			//只有在不是一次函数的时候并且没过期才会再次加入
-			if (v.StartTaskTime+v.Cycle > time.Now().Unix()) && v.Cycle == -1 && (v.LimitNum == 0 || (v.LimitNum != 0 && v.LimitNum > 1 && v.Num < v.LimitNum)) {
+			if ((v.StartTaskTime+v.Cycle > time.Now().Unix() && v.Cycle != -1) || v.Cycle == -1) && (v.LimitNum == 0 || (v.LimitNum != 0 && v.LimitNum > 1 && v.Num < v.LimitNum)) {
 				tw.addTc(v.Task)
 			} else {
+				//删除任务
+				tw.delTc(v.Tid)
 				//过期
-				v.EndFunc(v.Task, Chanl{})
+				if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
+					//因为都是主协操作、因此不用考虑其他情况
+					tw.taskqueue.queue <- unsafe.Pointer(v)
+				} else {
+					//如果不走协程池或者队列满了、则新开新的现场
+					go end(v.Task, Chanl{Signal: TIMEOUTASK})
+				}
+
 			}
 			e = n
 		}
@@ -182,7 +204,7 @@ func (tw *Timewheel) AddTc(t *Task) error {
 func (tw *Timewheel) newTask(t *TimeTask) {
 	d := t.Duration + t.Delay //按照秒
 	t.cyclenum = int(d) / tw.slotsNum
-	pos := (tw.currentTick + int(t.Duration+t.Delay)/tw.tickduration) % tw.slotsNum
+	pos := (tw.currentTick + int(t.Duration+t.Delay)/int(tw.tickduration.Seconds())) % tw.slotsNum
 	//如果任务id为0 则生成一个
 	if t.Tid == "" {
 		guid := xid.New().String()

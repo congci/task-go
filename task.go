@@ -67,11 +67,12 @@ type TimeTask struct {
 
 //任务信号
 const (
-	ADDTASK    = iota //0
-	UPDATETASK        //1
-	DELTASK           //2
-	TIMEOUTASK        //3 自然过期
-	DELAYTASK         //4 专门延时的信号 timechannel
+	ADDTASK    = 0 //0
+	TIMEOUTASK = 2 // 自然过期
+	UPDATETASK = 3 //更新
+	DELAYTASK  = 4 //4 专门延时的信号 timechannel
+
+	DELTASK = 9 //删除
 )
 
 //任务名称
@@ -98,12 +99,12 @@ type TT interface {
 var mode TT //初始化的时候会用
 
 //工厂类
-func NewTask(name int) TT {
+func NewTask(name int, p *Param) TT {
 	if name == TIMEWHEEL {
-		mode = newTimeWheel()
+		mode = newTimeWheel(p)
 		return mode
 	} else if name == TIMECHANNEL {
-		mode = newTimeChannel()
+		mode = newTimeChannel(p)
 		return mode
 	}
 	return nil
@@ -126,14 +127,6 @@ func do(t *TimeTask) {
 		}
 	}()
 	t.Num++
-	//此处判断是否过期
-	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < time.Now().Unix() {
-		if t.C != nil {
-			t.C <- Chanl{Signal: TIMEOUTASK, Data: unsafe.Pointer(t)}
-		}
-		return
-	}
-
 	if t.Command != "" {
 		cmd := exec.Command(t.Command)
 		if _, err := cmd.Output(); err != nil {
@@ -234,4 +227,8 @@ func autoUpdate(task *Task, v *Task) {
 }
 
 type Param struct {
+	SlotsNum     int           //时间轮大小
+	QueueNum     int           //时间轮协程池内的数量
+	Tickduration time.Duration //时间轮多长时间走一次、暂时按秒
+	QueueCap     int           //轮协程池队列channel的容量、注意是总量
 }

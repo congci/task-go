@@ -31,7 +31,7 @@ type Task struct {
 	TaskStr  string `json:"taskstr"` //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、可以传这个、传str是为了方便看
 	TaskByte []byte `json:"-"`       //任务执行过程的时候、减少转换解析
 
-	Delay int `json:"delay"` //如果有延时、则代表任务是一次性任务
+	Delay int64 `json:"delay"` //延时多少秒后开始执行、初次延时 或者 逻辑任务内延时标志、
 
 	Num        uint `json:"num"`         //执行次数 用户状态观察
 	SuccessNum uint `json:"success_num"` //执行成功次数
@@ -52,7 +52,7 @@ type Task struct {
 	Func    func(*Task)        `json:"-"` //执行函数
 	EndFunc func(*Task, Chanl) `json:"-"` //结束函数
 
-	Interrupted int8 `json:"interrupted"` //第一次导入的时候看是否中断过
+	del int8 `json:"isdel"` //在timechannel是否已经被删除、如果延时再次加入的时候已经被删除、则不在加入
 }
 
 //类型统一结构
@@ -71,6 +71,7 @@ const (
 	UPDATETASK        //1
 	DELTASK           //2
 	TIMEOUTASK        //3 自然过期
+	DELAYTASK         //4 专门延时的信号 timechannel
 )
 
 //任务名称
@@ -220,9 +221,7 @@ func autoUpdate(task *Task, v *Task) {
 	if task.Cycle == 0 && v.Cycle != 0 {
 		task.Cycle = v.Cycle
 	}
-	if task.Delay == 0 && v.Delay != 0 {
-		task.Delay = v.Delay
-	}
+
 	if task.Extend == nil && v.Extend != nil {
 		task.Extend = v.Extend
 	}
@@ -232,4 +231,7 @@ func autoUpdate(task *Task, v *Task) {
 	if task.Bid == "" && v.Bid != "" {
 		task.Bid = v.Bid
 	}
+}
+
+type Param struct {
 }

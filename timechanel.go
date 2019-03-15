@@ -17,10 +17,8 @@ var (
 
 //time + channel - 底层是最小堆
 type Timechannel struct {
-	T        *time.Ticker
-	Intervel time.Duration
-	tt       *list.List
-	C        chan Chanl //主线程通知信号
+	tt *list.List //任务保存的地方
+	C  chan Chanl //主线程通知信号
 }
 
 func newTimeChannel() *Timechannel {
@@ -31,8 +29,6 @@ func newTimeChannel() *Timechannel {
 
 func (tc *Timechannel) initT() {
 	tc.tt = list.New()
-	tc.Intervel = 5                                  //暂时限定5
-	tc.T = time.NewTicker(tc.Intervel * time.Second) //每几秒执行一次
 	tc.C = make(chan Chanl, 1)
 }
 
@@ -48,34 +44,40 @@ func (tc *Timechannel) CheckAndTask(t *TimeTask) {
 	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
 		return
 	}
+
 	if (t.EndTime != 0 && t.EndTime < now) || (t.StartTime != 0 && t.StartTime < now-t.Duration) || (t.StartTime == 0 && t.EndTime == 0) {
 		t.StartTime = now
 		t.EndTime = now + t.Duration
 	}
-	//任务中断过
-	if t.EndTime != 0 && (now > t.StartTime && t.EndTime > now && t.StartTime > now-t.Duration && t.EndTime-now < t.Duration) {
-		log.Print("delay Tc" + t.TaskStr)
-		t.Interrupted = 1
+
+	//代表第一次添加
+	if t.Delay != 0 {
+		t.Delay = 0
+		time.AfterFunc(time.Duration(t.Delay), func() {
+			log.Print("delay Tc" + t.TaskStr)
+			tc.C <- Chanl{Signal: DELAYTASK, Data: unsafe.Pointer(t)}
+		})
+		return
+	}
+
+	//如果初次加载的任务中断过
+	if t.EndTime != 0 && now > t.StartTime && t.EndTime > now && t.StartTime > now-t.Duration && t.EndTime-now < t.Duration {
+		t.Delay = 0
 		time.AfterFunc(time.Duration(t.EndTime-now)*time.Second, func() {
 			log.Print("delay Tc" + t.TaskStr)
-			//到点了执行一次
 			do(t)
-			tc.AddTc(t.Task)
-
+			tc.C <- Chanl{Signal: DELAYTASK, Data: unsafe.Pointer(t)}
 		})
-	} else {
-		tc.newTask(t)
+		return
 	}
+	tc.newTask(t)
 }
 
-//开始 任务
+//默认死循环、添加删除都是在这个协程里、不能在其他协程里
 func (tc *Timechannel) Start() {
 	as = true
-	//默认死循环
 	for {
 		select {
-		case <-tc.T.C:
-			// tc.check() 数量小还可以、数量很大的话主协程不能这么做、只能在时间到了加
 		case d := <-tc.C:
 			//增加
 			if d.Signal == ADDTASK {
@@ -88,6 +90,11 @@ func (tc *Timechannel) Start() {
 			//删除
 			if d.Signal == DELTASK {
 				tc.delTc(*(*string)(d.Data))
+			}
+
+			//专门处理开始延时的任务
+			if d.Signal == DELAYTASK {
+				tc.delayTc((*TimeTask)(d.Data))
 			}
 		}
 	}
@@ -122,12 +129,9 @@ func (tc *Timechannel) newDelayTak(t *TimeTask) {
 //定时任务
 func (tc *Timechannel) newTask(t *TimeTask) {
 	log.Println("task info:", t)
-	if t.Duration == 0 {
-		t.Duration = DefaultDuration
-	}
-	//然后将中断恢复
-	t.Interrupted = 0
-	if t.Delay != 0 {
+
+	//代表是一次性任务、
+	if t.LimitNum == 1 {
 		tc.newDelayTak(t)
 		return
 	}
@@ -185,12 +189,24 @@ func (tc *Timechannel) updateTc(task *Task) error {
 
 //添加
 func (tc *Timechannel) AddTc(task *Task) error {
+	if task.Duration == 0 || task.Cycle == 0 {
+		return errors.New("add task fail no du no cy")
+	}
 	if !as {
 		tc.addTc(task)
 		return nil
 	}
 	tc.C <- Chanl{Signal: ADDTASK, Data: unsafe.Pointer(task)}
 	return nil
+}
+
+//专门添加延时的
+func (tc *Timechannel) delayTc(t *TimeTask) {
+	//延时执行的如果已经删除、则直接不加
+	if t.del == 1 {
+		return
+	}
+	tc.newTask(t)
 }
 
 //往任务链表里加数据
@@ -201,9 +217,9 @@ func (tc *Timechannel) addTc(t *Task) error {
 		t.Tid = guid
 	}
 	tmp.Task = t
-	tc.CheckAndTask(&tmp)
 	//加入全局
 	tc.tt.PushBack(&tmp)
+	tc.CheckAndTask(&tmp)
 	return nil
 }
 
@@ -221,7 +237,11 @@ func (tc *Timechannel) delTc(tid string) error {
 		n := e.Next()
 		if v.Tid == tid {
 			tc.tt.Remove(e)
-			v.C <- Chanl{Signal: DELTASK}
+			v.del = 1 //利用指针的特性、为延后加入期间删除的加个开关、如果在timeafter期间删除、则不再加入
+			//延期加入的此时没有c
+			if v.C != nil {
+				v.C <- Chanl{Signal: DELTASK}
+			}
 			return nil
 		}
 		e = n

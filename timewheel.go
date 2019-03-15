@@ -43,18 +43,13 @@ func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 		t.StartTime = now
 		t.EndTime = now + t.Duration
 	}
-	//任务中断过
-	if t.EndTime != 0 && (now > t.StartTime && t.EndTime > now && t.StartTime > now-t.Duration && t.EndTime-now < t.Duration) {
+	//任务中断过\延迟启动、加入到数据里
+	if t.EndTime != 0 && now > t.StartTime && t.EndTime > now && t.StartTime > now-t.Duration && t.EndTime-now < t.Duration {
 		log.Print("delay Tc" + t.TaskStr)
-		//走信号
-		time.AfterFunc(time.Duration(t.EndTime-now)*time.Second, func() {
-			do(t)
-			//加入队伍
-			tw.AddTc(t.Task)
-		})
-	} else {
-		tw.newTask(t)
+		t.Delay = t.EndTime - now
 	}
+	tw.newTask(t)
+
 }
 
 //如果有任务进来、则执行
@@ -142,6 +137,8 @@ func (tw *Timewheel) Exec() {
 			//如果是0、则执行、并且删除、如果不是delay而是tick则再次创建
 			n := e.Next()
 			ll.Remove(e)
+			//将偏移置为0、再次加入的时候就不用偏移了
+			v.Delay = 0
 			//如果有协程池、则走任务执行池
 			if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
 				//因为都是主协操作、因此不用考虑其他情况
@@ -154,7 +151,8 @@ func (tw *Timewheel) Exec() {
 			if _, ok := tw.taskmap[v.Tid]; ok {
 				delete(tw.taskmap, v.Tid)
 			}
-			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
+			//只有在不是一次函数的时候并且没过期才会再次加入
+			if (v.StartTaskTime+v.Cycle > time.Now().Unix()) && v.Cycle == -1 && (v.LimitNum == 0 || (v.LimitNum != 0 && v.LimitNum > 1 && v.Num < v.LimitNum)) {
 				tw.addTc(v.Task)
 			} else {
 				//过期
@@ -182,10 +180,9 @@ func (tw *Timewheel) AddTc(t *Task) error {
 	return nil
 }
 func (tw *Timewheel) newTask(t *TimeTask) {
-	t.Interrupted = 0
-	d := t.Duration //按照秒
+	d := t.Duration + t.Delay //按照秒
 	t.cyclenum = int(d) / tw.slotsNum
-	pos := (tw.currentTick + int(t.Duration)/tw.tickduration) % tw.slotsNum
+	pos := (tw.currentTick + int(t.Duration+t.Delay)/tw.tickduration) % tw.slotsNum
 	//如果任务id为0 则生成一个
 	if t.Tid == "" {
 		guid := xid.New().String()

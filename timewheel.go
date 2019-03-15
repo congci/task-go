@@ -255,6 +255,7 @@ func (tw *Timewheel) updateTc(task *Task) error {
 			//直接删除、然后新建
 			n := e.Next()
 			if v.Task.Tid == tid {
+				autoUpdate(task, v.Task)
 				tw.solts[index].Remove(e)
 				tw.addTc(task)
 				break

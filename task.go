@@ -178,3 +178,58 @@ func SuccessTask(t *Task) {
 func FailTask(t *Task) {
 	t.FailNum++
 }
+
+func autoUpdate(task *Task, v *Task) {
+	//补充非外部变量
+	if task.ExTendTids == nil && v.ExTendTids != nil {
+		task.ExTendTids = v.ExTendTids
+	}
+	if task.Num == 0 && v.Num != 0 {
+		task.Num = v.Num
+	}
+	if task.RetryNum == 0 && v.RetryNum != 0 {
+		task.RetryNum = v.RetryNum
+	}
+	if task.StartTime == 0 && v.StartTime != 0 {
+		task.StartTime = v.StartTime
+	}
+	if task.EndTime == 0 && v.EndTime != 0 {
+		task.EndTime = v.EndTime
+	}
+	if task.FailNum == 0 && v.FailNum != 0 {
+		task.FailNum = 0
+	}
+	if task.Func == nil && v.Func != nil {
+		task.Func = v.Func
+	}
+	if task.EndFunc == nil && v.EndFunc != nil {
+		task.EndFunc = v.EndFunc
+	}
+	if task.LimitNum == 0 && v.LimitNum != 0 {
+		task.LimitNum = v.LimitNum
+	}
+	if task.TaskStr == "" && v.TaskStr != "" {
+		task.TaskStr = v.TaskStr
+	}
+	if task.TaskByte == nil && v.TaskByte != nil {
+		task.TaskByte = v.TaskByte
+	}
+	if task.SuccessNum == 0 && v.SuccessNum != 0 {
+		task.SuccessNum = v.SuccessNum
+	}
+	if task.Cycle == 0 && v.Cycle != 0 {
+		task.Cycle = v.Cycle
+	}
+	if task.Delay == 0 && v.Delay != 0 {
+		task.Delay = v.Delay
+	}
+	if task.Extend == nil && v.Extend != nil {
+		task.Extend = v.Extend
+	}
+	if task.StartTaskTime == 0 && v.StartTaskTime != 0 {
+		task.StartTaskTime = v.StartTaskTime
+	}
+	if task.Bid == "" && v.Bid != "" {
+		task.Bid = v.Bid
+	}
+}

@@ -173,6 +173,7 @@ func (tc *Timechannel) updateTc(task *Task) error {
 		if v.Tid == task.Tid {
 			tc.tt.Remove(e)
 			v.C <- Chanl{Signal: TIMEOUTASK}
+			autoUpdate(task, v.Task)
 			tc.addTc(task)
 			return nil
 		}

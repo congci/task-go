@@ -229,7 +229,7 @@ func (tw *Timewheel) UpdateTc(task *Task) error {
 	if !as {
 		return errors.New("")
 	}
-	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(task)}
+	tw.C <- Chanl{Signal: UPDATETASK, Data: unsafe.Pointer(task)}
 	return nil
 }
 

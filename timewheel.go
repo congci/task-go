@@ -190,8 +190,9 @@ func (tw *Timewheel) newTask(t *TimeTask) {
 	if t.Tid == "" {
 		guid := xid.New().String()
 		t.Tid = guid
-		tw.taskmap[guid] = pos
 	}
+
+	tw.taskmap[t.Tid] = pos
 	tw.solts[pos].PushBack(t)
 }
 

@@ -40,7 +40,7 @@ type Task struct {
 	Duration int64 `json:"duration"` //时间间隔
 	Cycle    int64 `json:"cycle"`    //如果是-1则永远不停、生命周期
 
-	Create_time int64 `json:"create_time"` //创建时间、如果没有则为当前时间
+	StartTaskTime int64 `json:"start_task_time"` //创建时间、如果没有则为当前时间\避免业务create_time 影响
 
 	Command string `json:"common"` //如果有common代表是命令模式
 
@@ -103,6 +103,7 @@ func NewTask(name int) TT {
 	return nil
 }
 
+//没有设定执行函数执行的函数
 func runDo(t *Task) {
 	log.Print("hello world")
 }
@@ -120,7 +121,7 @@ func do(t *TimeTask) {
 	}()
 	t.Num++
 	//此处判断是否过期
-	if t.Cycle != -1 && t.Create_time+t.Cycle < time.Now().Unix() {
+	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < time.Now().Unix() {
 		if t.C != nil {
 			t.C <- Chanl{Signal: TIMEOUTASK, Data: unsafe.Pointer(t)}
 		}

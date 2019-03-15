@@ -31,11 +31,11 @@ var taskIndexMap map[int]int //任务和index的对应关系
 func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
 	now := time.Now().Unix()
 	//如果任务已经结束、则忽略
-	if t.Create_time == 0 {
-		t.Create_time = now
+	if t.StartTaskTime == 0 {
+		t.StartTaskTime = now
 	}
 
-	if t.Cycle != -1 && t.Create_time+t.Cycle < now {
+	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
 		return
 	}
 	//代表这个任务记录有问题、1\结束时间小于现在 2、开始时间小于 最近一个周期
@@ -109,7 +109,7 @@ func (tw *Timewheel) initT() {
 	for i := 0; i < tw.slotsNum; i++ {
 		tw.solts[i] = list.New()
 	}
-	tw.taskqueue.num = 4
+	tw.taskqueue.num = 20
 
 	//代表启动任务池
 	if tw.taskqueue.num != 0 {
@@ -154,7 +154,7 @@ func (tw *Timewheel) Exec() {
 			if _, ok := tw.taskmap[v.Id]; ok {
 				delete(tw.taskmap, v.Id)
 			}
-			if (v.Task.Delay == 0 && v.Create_time+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
+			if (v.Task.Delay == 0 && v.StartTaskTime+v.Cycle > time.Now().Unix()) || v.Cycle == -1 {
 				tw.addTc(v.Task)
 			} else {
 				//过期

@@ -38,12 +38,12 @@ func (tc *Timechannel) initT() {
 func (tc *Timechannel) CheckAndTask(t *TimeTask) {
 	//结束时间 - 当前时间 定时器执行、如果到了时间执行对应的操作、然后tick、保证接上以前的任务
 	now := time.Now().Unix()
-	if t.Create_time == 0 {
-		t.Create_time = now
+	if t.StartTaskTime == 0 {
+		t.StartTaskTime = now
 	}
 
 	//如果任务已经结束、则忽略
-	if t.Cycle != -1 && t.Create_time+t.Cycle < now {
+	if t.Cycle != -1 && t.StartTaskTime+t.Cycle < now {
 		return
 	}
 	if (t.EndTime != 0 && t.EndTime < now) || (t.StartTime != 0 && t.StartTime < now-t.Duration) || (t.StartTime == 0 && t.EndTime == 0) {

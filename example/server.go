@@ -8,8 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
+	"sync"
 	"time"
+
+	"github.com/rs/xid"
 
 	task "github.com/congci/task-go"
 )
@@ -22,6 +24,14 @@ type Res struct {
 
 var failRes = Res{Code: 100, Msg: "fail"}
 var successRes = Res{Code: 0, Msg: "success"}
+
+//业务id关联、很多都是mysql的id、可能有的任务也关联了另一个任务、需要一起删除等
+type Tidslink struct {
+	rw   sync.RWMutex
+	data map[string]string
+}
+
+var tidslink Tidslink
 
 func success(w *http.ResponseWriter) {
 	res, _ := json.Marshal(&successRes)
@@ -38,7 +48,7 @@ func fail(w *http.ResponseWriter) {
 var mode task.TT
 var port = flag.String("port", "0.0.0.0:8001", "port set")
 
-func runDo1() {
+func runDo1(*Task) {
 	fmt.Print("hahah")
 }
 
@@ -46,47 +56,51 @@ func main() {
 	flag.Parse()
 
 	//初始化
-	mode = task.NewTask(task.TIMEWHEEL)
+	mode = task.NewTask(task.TIMECHANNEL)
 
 	//如果要数据初始化则可以 task.AddOnlyTask()
 
 	var test = &Task{
-		Cycle:       1000,
-		Duration:    1,
-		Create_time: time.Now().Unix(),
-		Func:        runDo1,
+		Tid:           "111",
+		Cycle:         1000,
+		Duration:      1,
+		StartTaskTime: time.Now().Unix(),
+		Func:          runDo1,
 	}
 
 	var test2 = &Task{
-		Cycle:       10,
-		Duration:    1,
-		Create_time: time.Now().Unix(),
-		Func: func() {
+		Tid:           "2",
+		Cycle:         10,
+		Duration:      1,
+		StartTaskTime: time.Now().Unix(),
+		Func: func(*Task) {
 			fmt.Print("2 run")
 		},
-		EndFunc: func(task.Chanl) {
+		EndFunc: func(*Task, task.Chanl) {
 			fmt.Print("2 end")
 		},
 	}
 
 	var test3 = &Task{
-		Cycle:       -1,
-		Duration:    1,
-		Create_time: time.Now().Unix(),
-		Func: func() {
+		Tid:           "3",
+		Cycle:         -1,
+		Duration:      1,
+		StartTaskTime: time.Now().Unix(),
+		Func: func(*Task) {
 			fmt.Print("3 run")
 		},
-		EndFunc: func(task.Chanl) {
+		EndFunc: func(*Task, task.Chanl) {
 			fmt.Print("3 end")
 		},
 	}
 
-	mode.AddOnlyTask(test)
-	mode.AddOnlyTask(test2)
-	mode.AddOnlyTask(test3)
+	mode.AddTc(test)
+	mode.AddTc(test2)
+	mode.AddTc(test3)
 
-	mode.Start()
+	go mode.Start()
 
+	//接口都是业务型的
 	http.HandleFunc("/pushsub", addTc)      //增加任务
 	http.HandleFunc("/updatesub", updateTc) //更新任务
 	http.HandleFunc("/status", status)      //获取状态
@@ -110,6 +124,16 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 	}
 	task.TaskStr = string(b)
 
+	//业务id是0的话直接退出
+	if task.Tid == "" {
+		tid := xid.New().String()
+		task.Tid = tid
+		if task.Bid != "" {
+			tidslink.rw.Lock()
+			tidslink.data[task.Bid] = tid
+			tidslink.rw.Unlock()
+		}
+	}
 	//初始化task
 	mode.AddTc(&task)
 	success(&w)
@@ -126,9 +150,16 @@ func updateTc(w http.ResponseWriter, req *http.Request) {
 		fail(&w)
 		return
 	}
-
 	task.TaskStr = string(b)
 
+	if task.Bid != "" {
+		tidslink.rw.Lock()
+		tid, ok := tidslink.data[task.Bid]
+		tidslink.rw.Unlock()
+		if ok && task.Tid == "" {
+			task.Tid = tid
+		}
+	}
 	err = mode.UpdateTc(&task)
 	if err != nil {
 		fail(&w)
@@ -142,25 +173,29 @@ func delTc(w http.ResponseWriter, req *http.Request) {
 	if len(req.Form["id"]) < 0 {
 		fail(&w)
 	}
-	id, _ := strconv.Atoi(req.Form["id"][0])
-	err := mode.DelTc(id)
-	if err != nil {
-		fail(&w)
+	id := req.Form["id"][0]
+
+	//此处的id代表业务id、如果是任务id可以自己写
+	tidslink.rw.Lock()
+	tid, ok := tidslink.data[id]
+	tidslink.rw.Unlock()
+	if ok {
+		err := mode.DelTc(tid)
+		if err != nil {
+			fail(&w)
+			return
+		}
 	}
+
 	success(&w)
 }
 
 //获取状态
 func status(w http.ResponseWriter, req *http.Request) {
 	var ts = mode.GetAllTasks()
-	b, _ := json.Marshal(ts)
-	w.Write(b)
-}
-
-//根据自己的状态设置对应的函数！！！！！！！！！！！！！！！、如果没有则不会执行任务
-func setFunc(t *Task) {
-	if t.TaskName == "" {
-		t.Func = nil
-		t.EndFunc = nil
+	b, err := json.Marshal(ts)
+	if err != nil {
+		log.Print(err)
 	}
+	w.Write(b)
 }

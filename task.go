@@ -22,11 +22,14 @@ type taskqueue struct {
 
 //任务通用结构体
 type Task struct {
-	Tid      string      `json:"id"`        //id 不能重复 //不取id避免和业务冲突
-	TaskName string      `json:"task_name"` //如果不传有默认
-	TaskStr  string      `json:"taskstr"`   //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、必须
-	Extend   interface{} // 扩展字段 任务具体任务可能需要
-	Delay    int         `json:"delay"` //如果有延时、则代表任务是一次性任务
+	Tid        string   `json:"tid"` //tid 任务唯一标志符、不能重复 //不取id避免和业务冲突
+	Bid        string   `json:"bid"` //可能是业务id
+	ExTendTids []string `json:"-"`   //一个任务可能有附带的任务、关联的tid、可以一起删除等
+
+	Extend interface{} `json:"extend"` // 扩展字段 任务具体任务可能需要
+
+	TaskStr string `json:"taskstr"` //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、必须
+	Delay   int    `json:"delay"`   //如果有延时、则代表任务是一次性任务
 
 	Num        uint `json:"num"`         //执行次数 用户状态观察
 	SuccessNum uint `json:"success_num"` //执行成功次数

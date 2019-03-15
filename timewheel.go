@@ -221,6 +221,13 @@ func (tw *Timewheel) delTc(tid string) error {
 			n := e.Next()
 			if v.Task.Tid == tid {
 				tw.solts[index].Remove(e)
+				//如果有附加的小任务、则也直接删除
+				if v.ExTendTids != nil {
+					//循环删除
+					for _, v := range v.ExTendTids {
+						tw.delTc(v)
+					}
+				}
 				break
 			}
 			e = n

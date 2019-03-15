@@ -215,10 +215,12 @@ func (tw *Timewheel) delTc(id int) error {
 		delete(tw.taskmap, id)
 		for e := tw.solts[index].Front(); e != nil; {
 			v := e.Value.(*TimeTask)
+			n := e.Next()
 			if v.Task.Id == id {
 				tw.solts[index].Remove(e)
 				break
 			}
+			e = n
 		}
 	}
 	return nil
@@ -240,11 +242,14 @@ func (tw *Timewheel) updateTc(task *Task) error {
 		for e := tw.solts[index].Front(); e != nil; {
 			v := e.Value.(*TimeTask)
 			//直接删除、然后新建
+			n := e.Next()
 			if v.Task.Id == id {
 				tw.solts[index].Remove(e)
+				tw.addTc(task)
+				break
 			}
-			tw.addTc(task)
-			break
+			e = n
+
 		}
 	}
 	return nil

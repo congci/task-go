@@ -50,10 +50,12 @@ type Task struct {
 
 	Command string `json:"common"` //如果有common代表是命令模式
 
-	Func    func(*Task)        `json:"-"` //执行函数
-	EndFunc func(*Task, Chanl) `json:"-"` //结束函数
+	Func      func(*Task)        `json:"-"` //执行函数
+	EndFunc   func(*Task, Chanl) `json:"-"` //结束函数
+	StoreFunc func(*Task)        `json:"-"` //任务存储在哪
 
 	del int8 `json:"isdel"` //在timechannel是否已经被删除、如果延时再次加入的时候已经被删除、则不在加入
+
 }
 
 //类型统一结构

@@ -24,9 +24,6 @@ func newTimeChannel(p *Param) *Timechannel {
 	t := new(Timechannel)
 	t.tt = list.New()
 	t.C = make(chan Chanl, 1)
-	if p.StoreFunc != nil {
-		t.StoreFunc = p.StoreFunc
-	}
 	return t
 }
 
@@ -242,10 +239,19 @@ func (tc *Timechannel) signal() {
 	for {
 		<-sig
 		if tc.StoreFunc != nil {
-			tc.StoreFunc()
+			tc.StoreDFunc()
 			//暂时断开
 			os.Exit(1)
 		}
 	}
+}
 
+//默认存储
+func (tc *Timechannel) StoreDFunc() {
+	for e := tc.tt.Front(); e != nil; e = e.Next() {
+		val := e.Value.(*TimeTask)
+		if val.StoreFunc != nil {
+			val.StoreFunc(val.Task)
+		}
+	}
 }

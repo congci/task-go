@@ -126,6 +126,9 @@ func endDo(t *Task, stop interface{}) {
 }
 
 func do(t *TimeTask) {
+	if t.del {
+		return
+	}
 	defer func() {
 		if err := recover(); err != nil {
 			log.Print(err)

@@ -83,24 +83,19 @@ func (tw *Timewheel) Start() {
 
 			//执行动作
 		case d := <-tw.C:
-			tw.action(d)
+			//增加
+			if d.Signal == ADDTASK {
+				tw.addTc((*Task)(d.Data))
+			}
+			//更新
+			if d.Signal == UPDATETASK {
+				tw.updateTc((*Task)(d.Data))
+			}
+			//删除
+			if d.Signal == DELTASK {
+				tw.delTc(*(*string)(d.Data))
+			}
 		}
-	}
-}
-
-//如果有值
-func (tw *Timewheel) action(d Chanl) {
-	//增加
-	if d.Signal == ADDTASK {
-		tw.addTc((*Task)(d.Data))
-	}
-	//更新
-	if d.Signal == UPDATETASK {
-		tw.updateTc((*Task)(d.Data))
-	}
-	//删除
-	if d.Signal == DELTASK {
-		tw.delTc(*(*string)(d.Data))
 	}
 }
 
@@ -171,6 +166,8 @@ func (tw *Timewheel) Exec() {
 	}
 	for e := ll.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
+		log.Print(v)
+
 		if v.cyclenum != 0 {
 			v.cyclenum--
 			e = e.Next()
@@ -193,15 +190,19 @@ func (tw *Timewheel) Exec() {
 			if _, ok := tw.taskmap[v.Tid]; ok {
 				delete(tw.taskmap, v.Tid)
 			}
-			//只有在不是一次函数的时候并且没过期才会再次加入
+			//只有在不是一次函数的时候并且没过期才会再次加入\过期了就不再加入
 			if ((v.StartTaskTime+v.Cycle > time.Now().Unix() && v.Cycle != -1) || v.Cycle == -1) && (v.LimitNum == 0 || (v.LimitNum != 0 && v.LimitNum > 1 && v.Num < v.LimitNum)) {
 				tw.addTc(v.Task)
 			} else {
 				if v.del {
 					return
 				}
-				//删除任务
-				tw.delTc(v.Tid)
+				//如果已经过期了、那么把附属任务也删除
+				if v.ExTendTids != nil {
+					for _, etid := range v.ExTendTids {
+						tw.delTc(etid)
+					}
+				}
 				//过期
 				if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
 					//因为都是主协操作、因此不用考虑其他情况

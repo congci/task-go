@@ -61,8 +61,13 @@ func (tw *Timewheel) Execs() {
 	for {
 		select {
 		case data := <-tw.taskqueue.queue:
-			t := (*TimeTask)(data)
-			do(t)
+			if data.Signal == EXECFUNC {
+				do((*TimeTask)(data.Data))
+			}
+			if data.Signal == ENDFUNC {
+				end((*Task)(data.Data), Chanl{Signal: TIMEOUTASK})
+			}
+
 		}
 	}
 }
@@ -134,7 +139,7 @@ func newTimeWheel(p *Param) *Timewheel {
 
 	//代表启动任务池
 	if t.taskqueue.num != 0 {
-		t.taskqueue.queue = make(chan unsafe.Pointer, p.QueueCap)
+		t.taskqueue.queue = make(chan Chanl, p.QueueCap)
 		for i := 0; i < t.taskqueue.num; i++ {
 			go t.Execs()
 		}
@@ -178,7 +183,7 @@ func (tw *Timewheel) Exec() {
 			//如果有协程池、则走任务执行池
 			if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
 				//因为都是主协操作、因此不用考虑其他情况
-				tw.taskqueue.queue <- unsafe.Pointer(v)
+				tw.taskqueue.queue <- Chanl{Signal: EXECFUNC, Data: unsafe.Pointer(v)}
 			} else {
 				//如果不走协程池或者队列满了、则新开新的现场
 				go do(v)
@@ -192,17 +197,19 @@ func (tw *Timewheel) Exec() {
 			if ((v.StartTaskTime+v.Cycle > time.Now().Unix() && v.Cycle != -1) || v.Cycle == -1) && (v.LimitNum == 0 || (v.LimitNum != 0 && v.LimitNum > 1 && v.Num < v.LimitNum)) {
 				tw.addTc(v.Task)
 			} else {
+				if v.del {
+					return
+				}
 				//删除任务
 				tw.delTc(v.Tid)
 				//过期
 				if tw.taskqueue.num != 0 && cap(tw.taskqueue.queue)-len(tw.taskqueue.queue) > 0 {
 					//因为都是主协操作、因此不用考虑其他情况
-					tw.taskqueue.queue <- unsafe.Pointer(v)
+					tw.taskqueue.queue <- Chanl{Signal: ENDFUNC, Data: unsafe.Pointer(v.Task)}
 				} else {
 					//如果不走协程池或者队列满了、则新开新的现场
 					go end(v.Task, Chanl{Signal: TIMEOUTASK})
 				}
-
 			}
 			e = n
 		}

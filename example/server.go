@@ -52,16 +52,17 @@ func runDo1(*Task) {
 	fmt.Print("hahah")
 }
 
+type Param = task.Param
+
 func main() {
 	flag.Parse()
-
-	//初始化
-	mode = task.NewTask(task.TIMECHANNEL)
-
-	//如果要数据初始化则可以 task.AddOnlyTask()
+	tidslink.data = make(map[string]string)
+	//初始化\并且任务池100数量
+	mode = task.NewTask(task.TIMEWHEEL, &Param{QueueNum: 100})
 
 	var test = &Task{
-		Tid:           "111",
+		Tid:           "1",
+		Bid:           "1",
 		Cycle:         1000,
 		Duration:      1,
 		StartTaskTime: time.Now().Unix(),
@@ -70,6 +71,7 @@ func main() {
 
 	var test2 = &Task{
 		Tid:           "2",
+		Bid:           "2",
 		Cycle:         10,
 		Duration:      1,
 		StartTaskTime: time.Now().Unix(),
@@ -83,6 +85,7 @@ func main() {
 
 	var test3 = &Task{
 		Tid:           "3",
+		Bid:           "3",
 		Cycle:         -1,
 		Duration:      1,
 		StartTaskTime: time.Now().Unix(),
@@ -93,6 +96,9 @@ func main() {
 			fmt.Print("3 end")
 		},
 	}
+	tidslink.data["1"] = "1"
+	tidslink.data["2"] = "2"
+	tidslink.data["3"] = "3"
 
 	mode.AddTc(test)
 	mode.AddTc(test2)
@@ -124,15 +130,17 @@ func addTc(w http.ResponseWriter, req *http.Request) {
 	}
 	task.TaskStr = string(b)
 
+	tid := task.Tid
 	//业务id是0的话直接退出
-	if task.Tid == "" {
-		tid := xid.New().String()
+	if tid == "" {
 		task.Tid = tid
-		if task.Bid != "" {
-			tidslink.rw.Lock()
-			tidslink.data[task.Bid] = tid
-			tidslink.rw.Unlock()
-		}
+		tid = xid.New().String()
+	}
+
+	if task.Bid != "" {
+		tidslink.rw.Lock()
+		tidslink.data[task.Bid] = tid
+		tidslink.rw.Unlock()
 	}
 	//初始化task
 	mode.AddTc(&task)

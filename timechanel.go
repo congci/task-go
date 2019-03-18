@@ -115,6 +115,9 @@ func (tc *Timechannel) newTask(t *TimeTask) {
 					//任务的task
 					do(t)
 				} else {
+					if t.del {
+						return
+					}
 					//过期直接退出
 					tc.delTc(t.Tid, false) //先删除任务
 					end(t.Task, Chanl{Signal: TIMEOUTASK})
@@ -175,7 +178,7 @@ func (tc *Timechannel) AddTc(task *Task) error {
 //专门添加延时的
 func (tc *Timechannel) delayTc(t *TimeTask) {
 	//延时执行的如果已经删除、则直接不加
-	if t.del == 1 {
+	if t.del {
 		return
 	}
 	tc.newTask(t)
@@ -209,7 +212,7 @@ func (tc *Timechannel) delTc(tid string, mode bool) error {
 		n := e.Next()
 		if v.Tid == tid {
 			tc.tt.Remove(e)
-			v.del = 1 //利用指针的特性、为延后加入期间删除的加个开关、如果在timeafter期间删除、则不再加入
+			v.del = true //利用指针的特性、为延后加入期间删除的加个开关、如果在timeafter期间删除、则不再加入
 			//延期加入的此时没有c
 			if mode && v.C != nil {
 				v.C <- Chanl{Signal: DELTASK}

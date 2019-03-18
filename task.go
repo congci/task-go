@@ -16,7 +16,7 @@ var as = false
 
 //任务执行池
 type taskqueue struct {
-	queue chan unsafe.Pointer
+	queue chan Chanl
 	num   int
 }
 
@@ -54,7 +54,7 @@ type Task struct {
 	EndFunc   func(*Task, Chanl) `json:"-"` //结束函数
 	StoreFunc func(*Task)        `json:"-"` //任务存储在哪
 
-	del int8 `json:"isdel"` //在timechannel是否已经被删除、如果延时再次加入的时候已经被删除、则不在加入
+	del bool `json:"isdel"` //在timechannel是否已经被删除、如果延时再次加入的时候已经被删除、则不在加入
 
 }
 
@@ -76,6 +76,9 @@ const (
 	DELAYTASK  = 4 //4 专门延时的信号 timechannel
 
 	DELTASK = 9 //删除
+
+	EXECFUNC = 100 //执行任务
+	ENDFUNC  = 101 //删除任务
 )
 
 //任务名称
@@ -155,6 +158,7 @@ func do(t *TimeTask) {
 
 //任务完成后操作
 func end(t *Task, stop Chanl) {
+	t.del = true
 	if t.EndFunc != nil {
 		t.EndFunc(t, stop)
 		return

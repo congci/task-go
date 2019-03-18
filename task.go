@@ -27,12 +27,12 @@ type Task struct {
 	ExTendTids   []string `json:"extendtis"`      //一个任务可能有附带的任务、关联的tid、可以一起删除等
 	IsExtendTask bool     `json:"is_extend_task"` //是否是扩展任务、如果是扩展任务、则不影响时间
 
-	Extend interface{} `json:"extend"` // 扩展字段 任务具体任务可能需要
+	Extend interface{} `json:"extend"` // 扩展字段 任务具体任务可能需要、但是具体任务结构体可以一般都存在taskstr或者taskbyte里面
 
 	TaskStr  string `json:"taskstr"` //server 接口的时候 存储任务task详情 json结构用于解析 -- 用户自定义任务 用于解析结构体、可以传这个、传str是为了方便看
 	TaskByte []byte `json:"-"`       //任务执行过程的时候、减少转换解析
 
-	Delay int64 `json:"delay"` //延时多少秒后开始执行、初次延时 或者 逻辑任务内延时标志、
+	Delay int64 `json:"delay"` //延时多少秒后开始执行、初次延时 或者 逻辑任务内延时标志、每次加任务只延时一次
 
 	Num        uint `json:"num"`         //执行次数 用户状态观察
 	SuccessNum uint `json:"success_num"` //执行成功次数

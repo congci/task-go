@@ -63,6 +63,7 @@ func (tw *Timewheel) Execs() {
 		}
 	}
 }
+
 func (tw *Timewheel) Start() {
 	as = true
 	for {
@@ -243,7 +244,7 @@ func (tw *Timewheel) addTc(task *Task) error {
 //删除
 func (tw *Timewheel) DelTc(id string) error {
 	if !as {
-		return errors.New("")
+		return errors.New("no runing")
 	}
 	tw.C <- Chanl{Signal: DELTASK, Data: unsafe.Pointer(&id)}
 	return nil
@@ -277,7 +278,7 @@ func (tw *Timewheel) delTc(tid string) error {
 //更新
 func (tw *Timewheel) UpdateTc(task *Task) error {
 	if !as {
-		return errors.New("")
+		return errors.New("no runing")
 	}
 	tw.C <- Chanl{Signal: UPDATETASK, Data: unsafe.Pointer(task)}
 	return nil

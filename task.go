@@ -234,4 +234,5 @@ type Param struct {
 	QueueNum     int           //时间轮协程池内的数量
 	Tickduration time.Duration //时间轮多长时间走一次、暂时按秒
 	QueueCap     int           //轮协程池队列channel的容量、注意是总量
+	StoreFunc    func()        //存储
 }

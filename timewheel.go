@@ -8,6 +8,9 @@ import (
 	"container/list"
 	"errors"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -27,6 +30,7 @@ type Timewheel struct {
 	tickduration time.Duration  //间隔
 	taskmap      map[string]int //task的id映射在槽的index
 	taskqueue    taskqueue      //任务池
+	StoreFunc    func()         //存储
 }
 
 func (tw *Timewheel) CheckAndAddTask(t *TimeTask) {
@@ -65,6 +69,7 @@ func (tw *Timewheel) Execs() {
 }
 
 func (tw *Timewheel) Start() {
+	go tw.signal()
 	as = true
 	for {
 		select {
@@ -125,7 +130,9 @@ func newTimeWheel(p *Param) *Timewheel {
 	for i := 0; i < t.slotsNum; i++ {
 		t.solts[i] = list.New()
 	}
-
+	if p.StoreFunc != nil {
+		t.StoreFunc = p.StoreFunc
+	}
 	t.taskqueue.num = p.QueueNum
 
 	//代表启动任务池
@@ -315,4 +322,19 @@ func (tw *Timewheel) GetAllTasks() []*Task {
 		}
 	}
 	return tmp
+}
+
+//信号机制、主要是不断开任务、在结束的时候把任务刷到存储里
+func (tw *Timewheel) signal() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGUSR2)
+	for {
+		<-sig
+		if tw.StoreFunc != nil {
+			tw.StoreFunc()
+			//暂时断开
+			os.Exit(1)
+		}
+	}
+
 }

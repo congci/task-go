@@ -4,6 +4,9 @@ import (
 	"container/list"
 	"errors"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -12,14 +15,18 @@ import (
 
 //time + channel - 底层是最小堆
 type Timechannel struct {
-	tt *list.List //任务保存的地方
-	C  chan Chanl //主线程通知信号
+	tt        *list.List //任务保存的地方
+	C         chan Chanl //主线程通知信号
+	StoreFunc func()
 }
 
 func newTimeChannel(p *Param) *Timechannel {
 	t := new(Timechannel)
 	t.tt = list.New()
 	t.C = make(chan Chanl, 1)
+	if p.StoreFunc != nil {
+		t.StoreFunc = p.StoreFunc
+	}
 	return t
 }
 
@@ -67,6 +74,8 @@ func (tc *Timechannel) CheckAndTask(t *TimeTask) {
 
 //默认死循环、添加删除都是在这个协程里、不能在其他协程里
 func (tc *Timechannel) Start() {
+	//监听信号
+	go tc.signal()
 	as = true
 	for {
 		select {
@@ -224,4 +233,19 @@ func (tc *Timechannel) GetAllTasks() []*Task {
 		ts = append(ts, v.Task)
 	}
 	return ts
+}
+
+//信号机制、主要是不断开任务、在结束的时候把任务刷到存储里
+func (tc *Timechannel) signal() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGUSR2)
+	for {
+		<-sig
+		if tc.StoreFunc != nil {
+			tc.StoreFunc()
+			//暂时断开
+			os.Exit(1)
+		}
+	}
+
 }

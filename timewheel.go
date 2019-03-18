@@ -292,7 +292,7 @@ func (tw *Timewheel) updateTc(task *Task) error {
 			n := e.Next()
 			if v.Task.Tid == tid {
 				autoUpdate(task, v.Task)
-				tw.solts[index].Remove(e)
+				tw.delTc(tid) //主任务删除、那么附加任务也删除
 				tw.addTc(task)
 				break
 			}

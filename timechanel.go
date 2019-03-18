@@ -15,9 +15,8 @@ import (
 
 //time + channel - 底层是最小堆
 type Timechannel struct {
-	tt        *list.List //任务保存的地方
-	C         chan Chanl //主线程通知信号
-	StoreFunc func()
+	tt *list.List //任务保存的地方
+	C  chan Chanl //主线程通知信号
 }
 
 func newTimeChannel(p *Param) *Timechannel {
@@ -238,11 +237,9 @@ func (tc *Timechannel) signal() {
 	signal.Notify(sig, syscall.SIGUSR2)
 	for {
 		<-sig
-		if tc.StoreFunc != nil {
-			tc.StoreDFunc()
-			//暂时断开
-			os.Exit(1)
-		}
+		tc.StoreDFunc()
+		//暂时断开
+		os.Exit(1)
 	}
 }
 

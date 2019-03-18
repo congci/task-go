@@ -339,7 +339,8 @@ func (tw *Timewheel) StoreDFunc() {
 	for _, v := range tw.solts {
 		for e := v.Front(); e != nil; e = e.Next() {
 			val := e.Value.(*TimeTask)
-			if val.StoreFunc != nil {
+			//主任务
+			if val.StoreFunc != nil && !val.IsExtendTask {
 				val.StoreFunc(val.Task)
 			}
 		}

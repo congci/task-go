@@ -247,7 +247,7 @@ func (tc *Timechannel) signal() {
 func (tc *Timechannel) StoreDFunc() {
 	for e := tc.tt.Front(); e != nil; e = e.Next() {
 		val := e.Value.(*TimeTask)
-		if val.StoreFunc != nil {
+		if val.StoreFunc != nil && !val.IsExtendTask {
 			val.StoreFunc(val.Task)
 		}
 	}

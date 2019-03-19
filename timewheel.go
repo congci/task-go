@@ -155,18 +155,12 @@ func newTimeWheel(p *Param) *Timewheel {
 //检查每个任务的cycle_num 如果是 0 则 执行、否则 -1
 func (tw *Timewheel) Exec() {
 	ll := tw.solts[tw.currentTick]
-	if tw.currentTick < tw.slotsNum-1 {
-		tw.currentTick++
-	}
-	if tw.currentTick == tw.slotsNum-1 {
-		tw.currentTick = 0
-	}
+
 	if ll == nil {
-		return
+		goto A
 	}
 	for e := ll.Front(); e != nil; {
 		v := e.Value.(*TimeTask)
-		log.Print(v)
 
 		if v.cyclenum != 0 {
 			v.cyclenum--
@@ -195,7 +189,7 @@ func (tw *Timewheel) Exec() {
 				tw.addTc(v.Task)
 			} else {
 				if v.del {
-					return
+					goto A
 				}
 				//如果已经过期了、那么把附属任务也删除
 				if v.ExTendTids != nil {
@@ -214,6 +208,13 @@ func (tw *Timewheel) Exec() {
 			}
 			e = n
 		}
+	}
+A:
+	if tw.currentTick < tw.slotsNum-1 {
+		tw.currentTick++
+	}
+	if tw.currentTick == tw.slotsNum-1 {
+		tw.currentTick = 0
 	}
 
 }

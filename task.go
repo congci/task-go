@@ -135,6 +135,13 @@ func do(t *TimeTask) {
 			return
 		}
 	}()
+	//执行完、则自动加周期\放到defer里面、防止任务失败造成没有
+	defer func() {
+		if !t.IsExtendTask {
+			UpdateTimeClock(t.Task)
+		}
+	}()
+
 	t.Num++
 	if t.Command != "" {
 		cmd := exec.Command(t.Command)
@@ -149,10 +156,6 @@ func do(t *TimeTask) {
 
 	if t.Func != nil {
 		t.Func(t.Task)
-		//执行完、则自动加周期
-		if !t.IsExtendTask {
-			UpdateTimeClock(t.Task)
-		}
 		return
 	}
 	runDo(t.Task)
